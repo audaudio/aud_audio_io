@@ -1,0 +1,22 @@
+// @license
+// Copyright (c) Audanika. All Rights Reserved.
+//
+// Use of this source code is governed by terms that can be
+// found in the LICENSE file in the root of this package.
+
+{
+  "name": "aud_audio_io",
+  "summary": "Audio device IO of the Audanika Audio Engine: enumeration, hot-plug, duplex multi-channel streams with timestamps; Oboe on Android, miniaudio elsewhere.",
+  "domain": [
+    "Audio device IO of the Audanika Audio Engine"
+  ],
+  "interfaces": {
+    "uses": {
+      "aud_audio_core": "package dependency"
+    },
+    "usedBy": {
+      "aud_audio_web": "consumes this package",
+      "aud_audio": "consumes this package"
+    }
+  }
+}
