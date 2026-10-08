@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add the spike stream on miniaudio and Oboe
+
 ## 0.0.2 - 2026-10-08
 
 ### Added
