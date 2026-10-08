@@ -1,71 +1,90 @@
-import 'package:flutter/material.dart';
+// @license
+// Copyright (c) Audanika. All Rights Reserved.
+//
+// Use of this source code is governed by terms that can be
+// found in the LICENSE file in the root of this package.
 
 import 'dart:async';
 
-import 'package:aud_audio_io/aud_audio_io.dart' as aud_audio_io;
+import 'package:aud_audio_io/aud_audio_io.dart';
+import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const AudIoExampleApp());
 }
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+/// Plays the sine of the package on the device and shows the callback
+/// timing.
+class AudIoExampleApp extends StatefulWidget {
+  /// Creates the example app.
+  const AudIoExampleApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  State<AudIoExampleApp> createState() => _AudIoExampleAppState();
 }
 
-class _MyAppState extends State<MyApp> {
-  late int sumResult;
-  late Future<int> sumAsyncResult;
+class _AudIoExampleAppState extends State<AudIoExampleApp> {
+  AudIoStream? _stream;
+  Timer? _timer;
+  AudIoStats? _stats;
+
+  void _toggle() {
+    final stream = _stream;
+    if (stream == null) {
+      final opened = AudIoStream.open(render: AudIoStream.sineRender);
+      opened.start();
+      _stream = opened;
+      _timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+        setState(() => _stats = opened.stats);
+      });
+    } else {
+      _timer?.cancel();
+      stream.close();
+      _stream = null;
+    }
+    setState(() {});
+  }
 
   @override
-  void initState() {
-    super.initState();
-    sumResult = aud_audio_io.sum(1, 2);
-    sumAsyncResult = aud_audio_io.sumAsync(3, 4);
+  void dispose() {
+    _timer?.cancel();
+    _stream?.close();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    const textStyle = TextStyle(fontSize: 25);
-    const spacerSmall = SizedBox(height: 10);
+    final stream = _stream;
+    final stats = _stats;
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(title: const Text('Native Packages')),
-        body: SingleChildScrollView(
-          child: Container(
-            padding: const .all(10),
-            child: Column(
-              children: [
-                const Text(
-                  'This calls a native function through FFI that is shipped as source in the package. '
-                  'The native code is built as part of the Flutter Runner build.',
-                  style: textStyle,
-                  textAlign: .center,
-                ),
-                spacerSmall,
-                Text(
-                  'sum(1, 2) = $sumResult',
-                  style: textStyle,
-                  textAlign: .center,
-                ),
-                spacerSmall,
-                FutureBuilder<int>(
-                  future: sumAsyncResult,
-                  builder: (BuildContext context, AsyncSnapshot<int> value) {
-                    final displayValue = (value.hasData)
-                        ? value.data
-                        : 'loading';
-                    return Text(
-                      'await sumAsync(3, 4) = $displayValue',
-                      style: textStyle,
-                      textAlign: .center,
-                    );
-                  },
-                ),
+        appBar: AppBar(title: const Text('aud_audio_io')),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FilledButton(
+                onPressed: _toggle,
+                child: Text(stream == null ? 'Play sine' : 'Stop'),
+              ),
+              if (stream != null) ...[
+                Text('Backend: ${stream.backendName}'),
+                Text('Sample rate: ${stream.sampleRate} Hz'),
+                Text('Frames per callback: ${stream.framesPerCallback}'),
               ],
-            ),
+              if (stats != null) ...[
+                Text('Callbacks: ${stats.callbacks}'),
+                Text(
+                  'Period mean/min/max: '
+                  '${(stats.periodMeanNs / 1e6).toStringAsFixed(2)} / '
+                  '${(stats.periodMinNs / 1e6).toStringAsFixed(2)} / '
+                  '${(stats.periodMaxNs / 1e6).toStringAsFixed(2)} ms',
+                ),
+                Text('Late callbacks: ${stats.lateCallbacks}'),
+                Text('Xruns: ${stats.xruns}'),
+              ],
+            ],
           ),
         ),
       ),
