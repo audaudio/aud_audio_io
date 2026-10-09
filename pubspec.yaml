@@ -1,6 +1,6 @@
 name: aud_audio_io
 description: "Audio device IO of the Audanika Audio Engine: enumeration, hot-plug, duplex multi-channel streams with timestamps; Oboe on Android, miniaudio elsewhere"
-version: 0.2.0
+version: 0.3.0
 publish_to: none
 homepage: https://github.com/audaudio/aud_audio_io
 repository: https://github.com/audaudio/aud_audio_io
