@@ -54,13 +54,13 @@ iOS-App im Hintergrund weiterspielen.
 Ein Sinus auf der Standardausgabe:
 
 ```dart
-import 'package:aud_audio_io/aud_audio_io.dart';
+import 'package:aud_audio_io/aud_audio_io_ffi.dart';
 
 Future<void> main() async {
-  final session = AudIoSession();
+  final session = AudIoSessionFfi();
   final stream = session.open(
     const AudIoStreamConfig(),
-    render: AudIoStream.sineRender,
+    render: AudIoStreamFfi.sineRender,
   );
   stream.start();
   await Future<void>.delayed(const Duration(seconds: 1));
@@ -77,7 +77,7 @@ Graphen aus und bestätigt das neue Format:
 ```dart
 final stream = session.open(
   AudIoStreamConfig(maxFrames: graph.maxFrames),
-  render: Native.addressOf(graphBindings.aud_graph_render),
+  render: Native.addressOf(aud_graph_render), // aud_audio_graph_ffi.dart
   user: graph.pointer.cast(),
 );
 graph.prepare(
