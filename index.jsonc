@@ -6,17 +6,21 @@
 
 {
   "name": "aud_audio_io",
-  "summary": "Audio device IO of the Audanika Audio Engine: enumeration, hot-plug, duplex multi-channel streams with timestamps; Oboe on Android, miniaudio elsewhere.",
+  "summary": "Audio device IO of the Audanika Audio Engine: session, devices, hot-plug, output/input/duplex streams calling an AudRenderFunction with AudStreamTime; recovery from disconnects, route/rate changes, interruptions; Oboe on Android, miniaudio + AVAudioSession on iOS, null device elsewhere (S3b-S3d).",
   "domain": [
-    "Audio device IO of the Audanika Audio Engine"
+    "Audio device IO of the Audanika Audio Engine",
+    "Stream timing (time-001), lifecycle per platform (lifecycle-001)",
+    "Null device with injected faults; latency probe"
   ],
   "interfaces": {
     "uses": {
-      "aud_audio_core": "package dependency"
+      "aud_audio_core": "aud_abi.h (AudRenderFunction, AudRenderRequest, AudStreamTime, AudAudioBus), aud_clock.h, aud_spsc_queue.hpp; Dart AudStreamTime, AudTimeSource",
+      "aud_audio_graph": "dev: end-to-end test, aud_graph_render through a stream",
+      "jni, jni_flutter": "Android: AudioManager devices, audio focus, RECORD_AUDIO"
     },
     "usedBy": {
-      "aud_audio_web": "consumes this package",
-      "aud_audio": "consumes this package"
+      "aud_audio": "umbrella wires AudIoStream to AudGraph (S4)",
+      "aud_audio_web": "consumes this package"
     }
   }
 }
