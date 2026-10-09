@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Split the Dart API into neutral and ffi parts
+
 ## 0.2.0 - 2026-10-09
 
 ### Changed

@@ -4,11 +4,7 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'dart:ffi';
-
-import 'aud_audio_io_bindings_generated.dart' as bindings;
 import 'aud_io_direction.dart';
-import 'aud_io_native_string.dart';
 import 'aud_io_route.dart';
 
 // #############################################################################
@@ -40,23 +36,6 @@ class AudIoDevice {
     this.maxInputChannels = 0,
     this.sampleRates = const [],
   });
-
-  /// Reads a device of the C API.
-  factory AudIoDevice.fromNative(bindings.AudIoDevice native) => AudIoDevice(
-    id: AudIoNativeString.read(native.id, bindings.AUD_IO_MAX_ID),
-    name: AudIoNativeString.read(native.name, bindings.AUD_IO_MAX_NAME),
-    directions: AudIoDirection.fromCode(native.directions),
-    route: AudIoRoute.fromCode(native.route),
-    isDefaultOutput:
-        (native.flags & bindings.AUD_IO_DEVICE_DEFAULT_OUTPUT) != 0,
-    isDefaultInput: (native.flags & bindings.AUD_IO_DEVICE_DEFAULT_INPUT) != 0,
-    isActive: (native.flags & bindings.AUD_IO_DEVICE_ACTIVE) != 0,
-    maxOutputChannels: native.max_output_channels,
-    maxInputChannels: native.max_input_channels,
-    sampleRates: List.unmodifiable([
-      for (var i = 0; i < native.num_sample_rates; i++) native.sample_rates[i],
-    ]),
-  );
 
   // ...........................................................................
   /// Stable while the device is attached.

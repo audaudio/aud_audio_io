@@ -6,9 +6,7 @@
 
 import 'package:aud_audio_core/aud_audio_core.dart';
 
-import 'aud_audio_io_bindings_generated.dart' as bindings;
 import 'aud_io_direction.dart';
-import 'aud_io_native_string.dart';
 import 'aud_io_performance_mode.dart';
 
 // #############################################################################
@@ -32,31 +30,6 @@ class AudIoStreamFormat {
     required this.inputDeviceId,
     required this.backend,
   });
-
-  /// Reads a format of the C API.
-  factory AudIoStreamFormat.fromNative(bindings.AudIoStreamFormat native) =>
-      AudIoStreamFormat(
-        direction: AudIoDirection.fromCode(native.direction),
-        sampleRate: native.sample_rate,
-        outputChannels: native.output_channels,
-        inputChannels: native.input_channels,
-        maxFrames: native.max_frames,
-        bufferFrames: native.buffer_frames,
-        burstFrames: native.burst_frames,
-        generation: native.generation,
-        performanceMode: AudIoPerformanceMode.fromCode(native.performance_mode),
-        exclusive: native.exclusive != 0,
-        timeSource: AudTimeSource.fromCode(native.time_source),
-        outputDeviceId: AudIoNativeString.read(
-          native.output_device_id,
-          bindings.AUD_IO_MAX_ID,
-        ),
-        inputDeviceId: AudIoNativeString.read(
-          native.input_device_id,
-          bindings.AUD_IO_MAX_ID,
-        ),
-        backend: AudIoNativeString.read(native.backend, 64),
-      );
 
   // ...........................................................................
   /// Output, input or duplex.

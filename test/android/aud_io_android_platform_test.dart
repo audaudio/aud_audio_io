@@ -6,7 +6,7 @@
 
 import 'dart:async';
 
-import 'package:aud_audio_io/aud_audio_io.dart';
+import 'package:aud_audio_io/aud_audio_io_ffi.dart';
 import 'package:aud_audio_io/src/android/aud_io_android_api.dart';
 import 'package:aud_audio_io/src/android/aud_io_android_platform.dart';
 import 'package:test/test.dart';
@@ -119,8 +119,8 @@ void main() {
 
     tearDown(() => resumed.close());
 
-    AudIoSession session() {
-      final created = AudIoSession(
+    AudIoSessionFfi session() {
+      final created = AudIoSessionFfi(
         backend: AudIoBackend.nullDevice,
         platform: platform,
       );
@@ -277,14 +277,14 @@ void main() {
         api,
         pollInterval: const Duration(hours: 1),
       );
-      final audio = AudIoSession(
+      final audio = AudIoSessionFfi(
         backend: AudIoBackend.nullDevice,
         platform: slow,
       );
       addTearDown(audio.dispose);
       final stream = audio.open(
         const AudIoStreamConfig(),
-        render: AudIoStream.sineRender,
+        render: AudIoStreamFfi.sineRender,
       );
       stream.start();
       final changed = audio.deviceChanges.first;
@@ -300,7 +300,7 @@ void main() {
       final audio = session();
       final stream = audio.open(
         const AudIoStreamConfig(),
-        render: AudIoStream.sineRender,
+        render: AudIoStreamFfi.sineRender,
       );
       stream.start();
       await until(() => platform.hasFocus);
@@ -331,7 +331,7 @@ void main() {
       final audio = session();
       final stream = audio.open(
         const AudIoStreamConfig(),
-        render: AudIoStream.sineRender,
+        render: AudIoStreamFfi.sineRender,
       );
       stream.start();
       await until(() => stream.state == AudIoState.interrupted);
@@ -344,7 +344,7 @@ void main() {
       final audio = session();
       final stream = audio.open(
         const AudIoStreamConfig(),
-        render: AudIoStream.sineRender,
+        render: AudIoStreamFfi.sineRender,
       );
       stream.start();
       await until(() => stream.state == AudIoState.interrupted);
@@ -359,7 +359,7 @@ void main() {
     test('detach() releases what the resumes came from', () {
       var detached = 0;
       final releasing = AudIoAndroidPlatform(api, onDetach: () => detached++);
-      final audio = AudIoSession(
+      final audio = AudIoSessionFfi(
         backend: AudIoBackend.nullDevice,
         platform: releasing,
         listen: false,
@@ -372,7 +372,7 @@ void main() {
       final audio = session();
       final stream = audio.open(
         const AudIoStreamConfig(),
-        render: AudIoStream.sineRender,
+        render: AudIoStreamFfi.sineRender,
       );
       stream.start();
       await until(() => platform.hasFocus);

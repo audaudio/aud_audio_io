@@ -6,8 +6,8 @@
 
 import 'dart:ffi';
 
-import 'package:aud_audio_core/aud_audio_core.dart';
-import 'package:aud_audio_io/aud_audio_io.dart';
+import 'package:aud_audio_core/aud_audio_core_ffi.dart';
+import 'package:aud_audio_io/aud_audio_io_ffi.dart';
 import 'package:aud_audio_io/src/aud_audio_io_bindings_generated.dart'
     as bindings;
 import 'package:ffi/ffi.dart';
@@ -16,7 +16,7 @@ import 'package:test/test.dart';
 void main() {
   group('AudIoProbe', () {
     test('measures the round trip through the loop of the null device', () {
-      final session = AudIoSession(
+      final session = AudIoSessionFfi(
         backend: AudIoBackend.nullDevice,
         directions: AudIoDirection.duplex,
         manualClock: true,

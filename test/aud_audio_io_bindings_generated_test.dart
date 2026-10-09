@@ -6,7 +6,7 @@
 
 import 'dart:ffi';
 
-import 'package:aud_audio_core/aud_audio_core.dart';
+import 'package:aud_audio_core/aud_audio_core_ffi.dart';
 import 'package:aud_audio_io/src/aud_audio_io_bindings_generated.dart'
     as bindings;
 import 'package:test/test.dart';

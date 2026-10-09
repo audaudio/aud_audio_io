@@ -4,12 +4,6 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'dart:ffi';
-
-import 'package:aud_audio_core/aud_audio_core_bindings.dart' as core;
-import 'package:ffi/ffi.dart';
-
-import 'aud_audio_io_bindings_generated.dart' as bindings;
 import 'aud_io_direction.dart';
 import 'aud_io_performance_mode.dart';
 
@@ -88,35 +82,4 @@ class AudIoStreamConfig {
   final bool followFormat;
 
   // ...........................................................................
-  /// Writes the configuration with [render] and [user] into a struct of the
-  /// C API allocated in [arena].
-  Pointer<bindings.AudIoStreamConfig> toNative(
-    Arena arena, {
-    required core.AudRenderFunction render,
-    Pointer<Void>? user,
-  }) {
-    final native = arena<bindings.AudIoStreamConfig>();
-    native.ref
-      ..struct_size = sizeOf<bindings.AudIoStreamConfig>()
-      ..direction = direction.code
-      ..output_device_id = outputDeviceId == null
-          ? nullptr
-          : outputDeviceId!.toNativeUtf8(allocator: arena).cast()
-      ..input_device_id = inputDeviceId == null
-          ? nullptr
-          : inputDeviceId!.toNativeUtf8(allocator: arena).cast()
-      ..output_channels = outputChannels
-      ..input_channels = inputChannels
-      ..sample_rate = sampleRate
-      ..buffer_frames = bufferFrames
-      ..max_frames = maxFrames
-      ..performance_mode = performanceMode.code
-      ..flags =
-          (exclusive ? bindings.AUD_IO_STREAM_EXCLUSIVE : 0) |
-          (latencyTuner ? bindings.AUD_IO_STREAM_LATENCY_TUNER : 0) |
-          (followFormat ? bindings.AUD_IO_STREAM_FOLLOW_FORMAT : 0)
-      ..render = render
-      ..render_user = user ?? nullptr;
-    return native;
-  }
 }

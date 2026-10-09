@@ -6,7 +6,7 @@
 
 import 'dart:convert';
 
-import 'package:aud_audio_io/aud_audio_io.dart';
+import 'package:aud_audio_io/aud_audio_io_ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -74,7 +74,7 @@ void main() {
   }
 
   testWidgets('measures the device', (tester) async {
-    final session = AudIoSession(
+    final session = AudIoSessionFfi(
       directions: AudIoDirection.duplex,
       measurement: measurement,
     );
@@ -88,7 +88,7 @@ void main() {
     // The output alone.
     final output = session.open(
       const AudIoStreamConfig(followFormat: true),
-      render: AudIoStream.sineRender,
+      render: AudIoStreamFfi.sineRender,
     );
     output.start();
     await Future<void>.delayed(const Duration(seconds: seconds));

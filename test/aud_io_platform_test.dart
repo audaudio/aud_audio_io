@@ -4,14 +4,14 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'package:aud_audio_io/aud_audio_io.dart';
+import 'package:aud_audio_io/aud_audio_io_ffi.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('AudIoPlatform.native()', () {
     test('leaves everything to the native backend', () {
       const platform = AudIoPlatform.native();
-      final session = AudIoSession(
+      final session = AudIoSessionFfi(
         backend: AudIoBackend.nullDevice,
         listen: false,
         platform: platform,

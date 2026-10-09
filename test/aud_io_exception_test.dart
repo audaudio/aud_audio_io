@@ -4,8 +4,8 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'package:aud_audio_core/aud_audio_core.dart';
-import 'package:aud_audio_io/aud_audio_io.dart';
+import 'package:aud_audio_core/aud_audio_core_ffi.dart';
+import 'package:aud_audio_io/aud_audio_io_ffi.dart';
 import 'package:aud_audio_io/src/aud_audio_io_bindings_generated.dart'
     as bindings;
 import 'package:test/test.dart';

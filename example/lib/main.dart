@@ -7,7 +7,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:aud_audio_io/aud_audio_io.dart';
+import 'package:aud_audio_io/aud_audio_io_ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -49,7 +49,7 @@ class AudIoExampleApp extends StatefulWidget {
 }
 
 class _AudIoExampleAppState extends State<AudIoExampleApp> {
-  late final AudIoSession _session;
+  late final AudIoSessionFfi _session;
   late final StreamSubscription<AudIoNotification> _subscription;
   List<AudIoDevice> _devices = const [];
   AudIoPermission? _permission;
@@ -66,7 +66,7 @@ class _AudIoExampleAppState extends State<AudIoExampleApp> {
   @override
   void initState() {
     super.initState();
-    _session = AudIoSession(directions: AudIoDirection.duplex);
+    _session = AudIoSessionFfi(directions: AudIoDirection.duplex);
     _subscription = _session.notifications.listen(_onNotification);
     _refresh();
   }
@@ -118,8 +118,8 @@ class _AudIoExampleAppState extends State<AudIoExampleApp> {
         // The render functions of the package follow a new format.
         AudIoStreamConfig(direction: _mode.direction, followFormat: true),
         render: switch (_mode) {
-          AudIoExampleMode.sine => AudIoStream.sineRender,
-          AudIoExampleMode.monitor => AudIoStream.thruRender,
+          AudIoExampleMode.sine => AudIoStreamFfi.sineRender,
+          AudIoExampleMode.monitor => AudIoStreamFfi.thruRender,
           AudIoExampleMode.probe => AudIoProbe.render,
         },
         user: probe?.pointer,
