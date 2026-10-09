@@ -45,11 +45,9 @@ packages:
   aud_audio_graph:
     dependency: "direct dev"
     description:
-      path: "."
-      resolved-ref: cca18de90247af34cea81584283fdd59eec4d48d
-      tag-pattern: "{{version}}"
-      url: "git@github.com:audaudio/aud_audio_graph.git"
-    source: git
+      path: "../aud_audio_graph"
+      relative: true
+    source: path
     version: "0.3.0"
   aud_midi_standard:
     dependency: transitive
