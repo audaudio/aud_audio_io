@@ -46,6 +46,13 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
+  aud_audio_core:
+    git:
+      url: git@github.com:audaudio/aud_audio_core.git
+      tag_pattern: "{{version}}"
+    version: ^0.3.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

@@ -1,18 +1,40 @@
-# Run with `dart run ffigen --config ffigen.yaml`.
+# Run with `node scripts/generate-bindings.js`, which resolves the header of
+# aud_audio_core through the package config.
 name: AudAudioIoBindings
 description: |
-  Bindings for `src/aud_audio_io.h`.
+  Bindings for `src/aud_audio_io.h`. The structs of the ABI come from the
+  bindings of aud_audio_core, so a stream hands the engine the same
+  `AudRenderRequest` and `AudStreamTime`.
 
-  Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
+  Regenerate them with `node scripts/generate-bindings.js`.
 output: 'lib/src/aud_audio_io_bindings_generated.dart'
 headers:
   entry-points:
     - 'src/aud_audio_io.h'
   include-directives:
     - 'src/aud_audio_io.h'
-compiler-opts:
-  - '-I../aud_audio_core/src'
 ffi-native:
+library-imports:
+  core: 'package:aud_audio_core/aud_audio_core_bindings.dart'
+type-map:
+  structs:
+    AudRenderRequest:
+      lib: core
+      c-type: AudRenderRequest
+      dart-type: AudRenderRequest
+    AudStreamTime:
+      lib: core
+      c-type: AudStreamTime
+      dart-type: AudStreamTime
+    AudAudioBus:
+      lib: core
+      c-type: AudAudioBus
+      dart-type: AudAudioBus
+  typedefs:
+    AudRenderFunction:
+      lib: core
+      c-type: AudRenderFunction
+      dart-type: AudRenderFunction
 preamble: |
   // @license
   // Copyright (c) Audanika. All Rights Reserved.

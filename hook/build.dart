@@ -12,12 +12,16 @@ import 'package:hooks/hooks.dart';
 import 'package:logging/logging.dart';
 import 'package:native_toolchain_c/native_toolchain_c.dart';
 
-// Builds the stream with the backend of the target platform: Oboe compiled
-// from the vendored sources on Android, miniaudio everywhere else. The
-// miniaudio translation unit is Objective-C++ (`.mm`) because miniaudio
-// talks to AVAudioSession on iOS; the sources therefore mix languages, no
-// language flag is passed - clang picks it by extension - and the C++
-// runtime is linked explicitly (build-001). The ABI header comes from
+// Builds the stream, the null backend and the backend of the target
+// platform (ticket 21): Oboe compiled from the vendored sources on Android,
+// miniaudio with AVAudioSession on iOS, the null backend alone elsewhere
+// until the desktop backends arrive (S3b to S3d). The iOS backend is
+// Objective-C++ (`.mm`); the sources therefore mix languages, no language
+// flag is passed - clang picks it by extension - and the C++ runtime is
+// linked explicitly (build-001). The symbols of the vendored libraries stay
+// hidden; only the AUD_EXPORT functions are visible. Android links with
+// 16 KB page alignment, which native_toolchain_c sets by default and
+// scripts/check-page-size.js proves. The ABI header comes from
 // aud_audio_core, resolved through the package config.
 void main(List<String> args) async {
   await build(args, (input, output) async {
@@ -25,14 +29,20 @@ void main(List<String> args) async {
     final packageName = input.packageName;
     final targetOS = input.config.code.targetOS;
     final android = targetOS == OS.android;
-    final apple = targetOS == OS.iOS || targetOS == OS.macOS;
+    final iOS = targetOS == OS.iOS;
+    final apple = iOS || targetOS == OS.macOS;
     final cbuilder = CBuilder.library(
       name: packageName,
       assetName: 'src/${packageName}_bindings_generated.dart',
       sources: [
-        'src/aud_io_sine.cpp',
-        if (android) 'src/aud_io_oboe.cpp' else 'src/aud_io_miniaudio.mm',
-        if (android) ...await oboeSources(input.packageRoot),
+        'src/aud_io_null.cpp',
+        'src/aud_io_render.cpp',
+        'src/aud_io_stream.cpp',
+        if (iOS) 'src/aud_io_ios.mm',
+        if (android) ...[
+          'src/aud_io_android.cpp',
+          ...await oboeSources(input.packageRoot),
+        ],
       ],
       includes: [
         'src',
@@ -43,16 +53,35 @@ void main(List<String> args) async {
         ],
       ],
       language: Language.c,
+      std: 'c++17',
+      flags: [
+        '-fvisibility=hidden',
+        '-fvisibility-inlines-hidden',
+        if (iOS) '-fobjc-arc',
+        if (android) ...[
+          '-Wl,-z,max-page-size=16384',
+          // The static C++ runtime stays inside the library.
+          '-Wl,--exclude-libs,ALL',
+          // Code nothing calls leaves the library.
+          '-ffunction-sections',
+          '-fdata-sections',
+          '-Wl,--gc-sections',
+        ],
+      ],
       libraries: [
         if (android) ...['c++_static', 'c++abi', 'log', 'OpenSLES', 'm'],
         if (apple) 'c++',
         if (!android && !apple) 'stdc++',
       ],
       frameworks: [
-        'Foundation',
-        if (apple) ...['CoreFoundation', 'CoreAudio', 'AudioToolbox'],
-        if (targetOS == OS.iOS) 'AVFoundation',
-        if (targetOS == OS.macOS) 'AudioUnit',
+        if (iOS) ...[
+          'AVFoundation',
+          'AudioToolbox',
+          'CoreAudio',
+          'CoreFoundation',
+          'Foundation',
+          'UIKit',
+        ],
       ],
     );
     await cbuilder.run(
