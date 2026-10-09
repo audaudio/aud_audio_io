@@ -53,13 +53,13 @@ keeps an iOS app playing in the background.
 A sine on the default output:
 
 ```dart
-import 'package:aud_audio_io/aud_audio_io.dart';
+import 'package:aud_audio_io/aud_audio_io_ffi.dart';
 
 Future<void> main() async {
-  final session = AudIoSession();
+  final session = AudIoSessionFfi();
   final stream = session.open(
     const AudIoStreamConfig(),
-    render: AudIoStream.sineRender,
+    render: AudIoStreamFfi.sineRender,
   );
   stream.start();
   await Future<void>.delayed(const Duration(seconds: 1));
@@ -76,7 +76,7 @@ and acknowledges the new format:
 ```dart
 final stream = session.open(
   AudIoStreamConfig(maxFrames: graph.maxFrames),
-  render: Native.addressOf(graphBindings.aud_graph_render),
+  render: Native.addressOf(aud_graph_render), // aud_audio_graph_ffi.dart
   user: graph.pointer.cast(),
 );
 graph.prepare(

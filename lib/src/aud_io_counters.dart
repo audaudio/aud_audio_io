@@ -6,7 +6,6 @@
 
 import 'package:aud_audio_core/aud_audio_core.dart';
 
-import 'aud_audio_io_bindings_generated.dart' as bindings;
 import 'aud_io_state.dart';
 
 // #############################################################################
@@ -39,35 +38,6 @@ class AudIoCounters {
     required this.hostTimeJitterMaxNs,
     required this.lastTime,
   });
-
-  /// Reads the counters of the C API.
-  factory AudIoCounters.fromNative(bindings.AudIoCounters native) =>
-      AudIoCounters(
-        state: AudIoState.fromCode(native.state),
-        callbacks: native.callbacks,
-        frames: native.frames,
-        renders: native.renders,
-        callbackFramesMin: native.callback_frames_min,
-        callbackFramesMax: native.callback_frames_max,
-        periodMinNs: native.period_min_ns,
-        periodMaxNs: native.period_max_ns,
-        periodSumNs: native.period_sum_ns,
-        periodCount: native.period_count,
-        lateCallbacks: native.late_callbacks,
-        xruns: native.xruns,
-        disconnects: native.disconnects,
-        recoveries: native.recoveries,
-        interruptions: native.interruptions,
-        heldBlocks: native.held_blocks,
-        renderErrors: native.render_errors,
-        notificationsDropped: native.notifications_dropped,
-        callbackTimeMaxNs: native.callback_time_max_ns,
-        callbackTimeSumNs: native.callback_time_sum_ns,
-        recoveryTimeMaxNs: native.recovery_time_max_ns,
-        recoveryTimeLastNs: native.recovery_time_last_ns,
-        hostTimeJitterMaxNs: native.host_time_jitter_max_ns,
-        lastTime: AudStreamTime.fromNative(native.last_time),
-      );
 
   // ...........................................................................
   /// The state of the stream.

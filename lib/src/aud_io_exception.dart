@@ -6,7 +6,7 @@
 
 import 'package:aud_audio_core/aud_audio_core.dart';
 
-import 'aud_audio_io_bindings_generated.dart' as bindings;
+import 'aud_io_constants.dart' as bindings;
 
 // #############################################################################
 /// Thrown when a session or a stream refuses a call.

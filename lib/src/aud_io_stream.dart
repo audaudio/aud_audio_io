@@ -4,19 +4,12 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'dart:ffi';
 import 'dart:typed_data';
 
-import 'package:aud_audio_core/aud_audio_core_bindings.dart' as core;
-import 'package:ffi/ffi.dart';
-
-import 'aud_audio_io_bindings_generated.dart' as bindings;
 import 'aud_io_counters.dart';
-import 'aud_io_exception.dart';
 import 'aud_io_notification.dart';
 import 'aud_io_session.dart';
 import 'aud_io_state.dart';
-import 'aud_io_stream_config.dart';
 import 'aud_io_stream_format.dart';
 
 // #############################################################################
@@ -39,162 +32,49 @@ import 'aud_io_stream_format.dart';
 /// reports each case in [notifications]. After
 /// [AudIoNotificationType.formatChanged] it plays silence until the client
 /// prepared its renderer for the new [format] and called [acknowledge].
-class AudIoStream {
-  /// Opens a stream of [session] in the stopped state.
-  ///
-  /// - [config] what the stream asks for
-  /// - [render] the native render function, called on the audio thread
-  /// - [user] handed to [render], e.g. the native graph
-  AudIoStream.open(
-    this.session,
-    AudIoStreamConfig config, {
-    required core.AudRenderFunction render,
-    Pointer<Void>? user,
-  }) {
-    if (session.isDisposed) {
-      throw const AudIoException(
-        core.AUD_ERROR_STATE,
-        'The session is disposed.',
-      );
-    }
-    _pointer = using((arena) {
-      final native = config.toNative(arena, render: render, user: user);
-      final result = arena<Int32>();
-      final pointer = bindings.aud_io_stream_open(
-        session.pointer,
-        native,
-        result,
-      );
-      AudIoException.check(result.value, 'open the stream');
-      return pointer;
-    });
-    id = bindings.aud_io_stream_id(_pointer);
-    session.adopt(this);
-  }
-
-  // ...........................................................................
-  /// A render function that plays a 440 Hz sine at -20 dBFS: the smoke
-  /// signal of the package.
-  static core.AudRenderFunction get sineRender =>
-      Native.addressOf<NativeFunction<core.AudRenderFunctionFunction>>(
-        bindings.aud_io_sine_render,
-      );
-
-  /// A render function that copies the input into the output: a monitor.
-  static core.AudRenderFunction get thruRender =>
-      Native.addressOf<NativeFunction<core.AudRenderFunctionFunction>>(
-        bindings.aud_io_thru_render,
-      );
-
-  // ...........................................................................
+///
+/// The platform-neutral API: on native platforms `AudIoSessionFfi.open`
+/// opens an `AudIoStreamFfi` with a render function.
+abstract interface class AudIoStream {
   /// The session of the stream.
-  final AudIoSession session;
+  AudIoSession get session;
 
   /// The id that names the stream in notifications.
-  late final int id;
-
-  /// The native stream.
-  Pointer<bindings.AudIoStream> get pointer => _pointer;
+  int get id;
 
   /// Whether [close] ran.
-  bool get isClosed => _pointer == nullptr;
+  bool get isClosed;
 
   /// The state of the stream.
-  AudIoState get state {
-    _checkOpen();
-    return AudIoState.fromCode(
-      AudIoException.check(
-        bindings.aud_io_stream_state(_pointer),
-        'read the state',
-      ),
-    );
-  }
+  AudIoState get state;
 
   /// What the stream got from its device.
-  AudIoStreamFormat get format {
-    _checkOpen();
-    final native = calloc<bindings.AudIoStreamFormat>();
-    try {
-      native.ref.struct_size = sizeOf<bindings.AudIoStreamFormat>();
-      AudIoException.check(
-        bindings.aud_io_stream_format(_pointer, native),
-        'read the format',
-      );
-      return AudIoStreamFormat.fromNative(native.ref);
-    } finally {
-      calloc.free(native);
-    }
-  }
+  AudIoStreamFormat get format;
 
   /// The counters since the stream opened or since [resetCounters].
-  AudIoCounters get counters {
-    _checkOpen();
-    final native = calloc<bindings.AudIoCounters>();
-    try {
-      native.ref.struct_size = sizeOf<bindings.AudIoCounters>();
-      AudIoException.check(
-        bindings.aud_io_stream_counters(_pointer, native),
-        'read the counters',
-      );
-      return AudIoCounters.fromNative(native.ref);
-    } finally {
-      calloc.free(native);
-    }
-  }
+  AudIoCounters get counters;
 
   /// The notifications of this stream.
-  Stream<AudIoNotification> get notifications =>
-      session.notifications.where((n) => n.streamId == id);
+  Stream<AudIoNotification> get notifications;
 
-  // ...........................................................................
   /// Starts the callbacks; from [AudIoState.failed] it reopens first, during
   /// an interruption it starts when the interruption ends.
-  void start() {
-    _checkOpen();
-    AudIoException.check(
-      bindings.aud_io_stream_start(_pointer),
-      'start the stream',
-    );
-  }
+  void start();
 
   /// Stops the callbacks; returns when no callback runs.
-  void stop() {
-    _checkOpen();
-    AudIoException.check(
-      bindings.aud_io_stream_stop(_pointer),
-      'stop the stream',
-    );
-  }
+  void stop();
 
   /// Tells the stream that the render function is prepared for the format
   /// of [generation]; it renders again from the next block.
-  void acknowledge(int generation) {
-    _checkOpen();
-    AudIoException.check(
-      bindings.aud_io_stream_acknowledge(_pointer, generation),
-      'acknowledge generation $generation',
-    );
-  }
+  void acknowledge(int generation);
 
   /// Zeroes the counters.
-  void resetCounters() {
-    _checkOpen();
-    AudIoException.check(
-      bindings.aud_io_stream_reset_counters(_pointer),
-      'reset the counters',
-    );
-  }
+  void resetCounters();
 
   /// Stops and closes the stream; no callback runs afterwards. Can be
   /// called twice.
-  void close() {
-    if (isClosed) return;
-    bindings.aud_io_stream_close(_pointer);
-    _pointer = nullptr;
-    session.release(this);
-  }
+  void close();
 
-  // ...........................................................................
   /// Runs one callback of a null device with the manual clock: [frames]
   /// frames at [hostTimeNs] with the interleaved [input], or the loop of
   /// the null device without one; returns the interleaved output.
@@ -202,38 +82,5 @@ class AudIoStream {
     required int frames,
     required int hostTimeNs,
     Float32List? input,
-  }) {
-    _checkOpen();
-    final channels = format.outputChannels;
-    final output = calloc<Float>(frames * channels + 1);
-    final nativeInput = input == null
-        ? nullptr
-        : calloc<Float>(input.length + 1);
-    try {
-      if (input != null) nativeInput.asTypedList(input.length).setAll(0, input);
-      AudIoException.check(
-        bindings.aud_io_null_process(
-          _pointer,
-          nativeInput,
-          channels == 0 ? nullptr : output,
-          frames,
-          hostTimeNs,
-        ),
-        'run a callback',
-      );
-      return Float32List.fromList(output.asTypedList(frames * channels));
-    } finally {
-      calloc.free(output);
-      if (nativeInput != nullptr) calloc.free(nativeInput);
-    }
-  }
-
-  // ...........................................................................
-  late Pointer<bindings.AudIoStream> _pointer;
-
-  void _checkOpen() {
-    if (isClosed) {
-      throw const AudIoException(core.AUD_ERROR_STATE, 'The stream is closed.');
-    }
-  }
+  });
 }

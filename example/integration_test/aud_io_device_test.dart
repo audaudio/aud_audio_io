@@ -6,8 +6,8 @@
 
 import 'dart:io';
 
-import 'package:aud_audio_core/aud_audio_core.dart';
-import 'package:aud_audio_io/aud_audio_io.dart';
+import 'package:aud_audio_core/aud_audio_core_ffi.dart';
+import 'package:aud_audio_io/aud_audio_io_ffi.dart';
 // The Android platform is internal; the test reads its focus.
 // ignore: implementation_imports
 import 'package:aud_audio_io/src/android/aud_io_android_platform.dart';
@@ -20,9 +20,9 @@ import 'package:integration_test/integration_test.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  late AudIoSession session;
+  late AudIoSessionFfi session;
 
-  setUp(() => session = AudIoSession(directions: AudIoDirection.duplex));
+  setUp(() => session = AudIoSessionFfi(directions: AudIoDirection.duplex));
   tearDown(() => session.dispose());
 
   Future<AudIoCounters> play(AudIoStream stream) async {
@@ -43,7 +43,7 @@ void main() {
   testWidgets('plays an output stream with stream times', (tester) async {
     final stream = session.open(
       const AudIoStreamConfig(),
-      render: AudIoStream.sineRender,
+      render: AudIoStreamFfi.sineRender,
     );
     final format = stream.format;
     final counters = await play(stream);
@@ -74,7 +74,7 @@ void main() {
     }
     final stream = session.open(
       const AudIoStreamConfig(direction: AudIoDirection.duplex),
-      render: AudIoStream.thruRender,
+      render: AudIoStreamFfi.thruRender,
     );
     final format = stream.format;
     final counters = await play(stream);
@@ -100,7 +100,7 @@ void main() {
     final platform = session.platform as AudIoAndroidPlatform;
     final stream = session.open(
       const AudIoStreamConfig(),
-      render: AudIoStream.sineRender,
+      render: AudIoStreamFfi.sineRender,
     );
     stream.start();
     await Future<void>.delayed(const Duration(milliseconds: 500));

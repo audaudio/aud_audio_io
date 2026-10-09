@@ -4,7 +4,7 @@
 // Use of this source code is governed by terms that can be
 // found in the LICENSE file in the root of this package.
 
-import 'aud_audio_io_bindings_generated.dart' as bindings;
+import 'aud_io_constants.dart' as bindings;
 import 'aud_io_permission.dart';
 
 // #############################################################################
@@ -126,21 +126,6 @@ class AudIoNotification {
     this.outputChannels = 0,
     this.inputChannels = 0,
   });
-
-  /// Reads a notification of the C API.
-  factory AudIoNotification.fromNative(bindings.AudIoNotification native) =>
-      AudIoNotification(
-        type: AudIoNotificationType.fromCode(native.type),
-        streamId: native.stream,
-        code: native.code,
-        reason: AudIoReason.fromCode(native.reason),
-        generation: native.generation,
-        hostTimeNs: native.host_time_ns,
-        value: native.value,
-        sampleRate: native.sample_rate,
-        outputChannels: native.output_channels,
-        inputChannels: native.input_channels,
-      );
 
   // ...........................................................................
   /// What happened.

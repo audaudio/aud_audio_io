@@ -1,6 +1,6 @@
 name: aud_audio_io
 description: "Audio device IO of the Audanika Audio Engine: enumeration, hot-plug, duplex multi-channel streams with timestamps; Oboe on Android, miniaudio elsewhere"
-version: 0.2.0
+version: 0.3.0
 publish_to: none
 homepage: https://github.com/audaudio/aud_audio_io
 repository: https://github.com/audaudio/aud_audio_io
@@ -16,7 +16,7 @@ dependencies:
     git:
       url: git@github.com:audaudio/aud_audio_core.git
       tag_pattern: "{{version}}"
-    version: ^0.3.0
+    version: ^0.4.0
   code_assets: ^2.1.0
   hooks: ^2.2.0
   jni: ^1.1.0
@@ -30,7 +30,7 @@ dev_dependencies:
     git:
       url: git@github.com:audaudio/aud_audio_graph.git
       tag_pattern: "{{version}}"
-    version: ^0.3.0
+    version: ^0.4.0
   dna_audanika: ^0.0.2
   ffigen: ^23.0.0
   flutter_lints: ^6.0.0
