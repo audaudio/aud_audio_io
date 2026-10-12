@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 - 2026-10-12
+
+### Added
+
+- Add review fixes of ticket 26
+
+- Remove the blank lines between the entries under Unreleased in CHANGELOG.md
+
 ## 0.3.1 - 2026-10-12
 
 ## 0.3.0 - 2026-10-09
