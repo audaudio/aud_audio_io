@@ -1,12 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.3.3 - 2026-10-14
 
 ### Added
 
 - Add the example lock of the current version
 
 - The lock of the example records the version of the package it plays
+
 
 ### Changed
 
@@ -19,7 +20,6 @@
 - Add review fixes of ticket 26
 
 - Remove the blank lines between the entries under Unreleased in CHANGELOG.md
-
 
 ## 0.3.1 - 2026-10-12
 
