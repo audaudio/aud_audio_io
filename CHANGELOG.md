@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- S9b: Limit the voices of the sampler by the CPU power of the device
+
 ## 0.3.2 - 2026-10-12
 
 ### Added
@@ -7,6 +13,7 @@
 - Add review fixes of ticket 26
 
 - Remove the blank lines between the entries under Unreleased in CHANGELOG.md
+
 
 ## 0.3.1 - 2026-10-12
 
