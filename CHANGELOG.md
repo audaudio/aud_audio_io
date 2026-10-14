@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.3 - 2026-10-14
+
+### Added
+
+- Add the example lock of the current version
+
+- The lock of the example records the version of the package it plays
+
+
+### Changed
+
+- S9b: Limit the voices of the sampler by the CPU power of the device
+
 ## 0.3.2 - 2026-10-12
 
 ### Added
