@@ -10,15 +10,15 @@ import 'aud_io_constants.dart' as bindings;
 /// Where the audio thread of a stream runs (io-003).
 enum AudIoPlacement {
   /// The system places the thread: on iOS, on devices with one cluster of
-  /// cores, and before the first callback.
+  /// cores below Android 12, before the first callback and after a stop.
   system(bindings.AUD_IO_PLACEMENT_SYSTEM),
 
   /// Android 12 and later: a performance hint session learns the work of
   /// each callback and moves the thread to faster cores and clocks.
   hint(bindings.AUD_IO_PLACEMENT_HINT),
 
-  /// Android 10 and 11, or without a hint session: the thread is bound to
-  /// the cores above the slowest clock.
+  /// Below Android 12, or without a hint session: the thread is bound to the
+  /// cores above the slowest clock.
   affinity(bindings.AUD_IO_PLACEMENT_AFFINITY),
 
   /// The system refused the affinity; the thread runs where it places it.

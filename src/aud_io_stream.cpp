@@ -106,28 +106,6 @@ struct Counters {
   }
 };
 
-// Adds to a counter only the audio thread writes; never a locked
-// read-modify-write.
-template <typename T>
-inline void bump(std::atomic<T>& counter, T value) AUD_NONBLOCKING {
-  counter.store(counter.load(std::memory_order_relaxed) + value,
-                std::memory_order_relaxed);
-}
-
-template <typename T>
-inline void raise(std::atomic<T>& counter, T value) AUD_NONBLOCKING {
-  if (value > counter.load(std::memory_order_relaxed)) {
-    counter.store(value, std::memory_order_relaxed);
-  }
-}
-
-template <typename T>
-inline void lower(std::atomic<T>& counter, T value) AUD_NONBLOCKING {
-  if (value < counter.load(std::memory_order_relaxed)) {
-    counter.store(value, std::memory_order_relaxed);
-  }
-}
-
 // The stream time of the last block: the audio thread writes it, the
 // control thread reads it; a sequence lock over atomic fields.
 class TimeCell {

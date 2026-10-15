@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "aud_audio_io.h"
+#include "aud_io_internal.hpp"
 #include "aud_clock.h"
 #include "aud_test.hpp"
 
@@ -601,6 +602,33 @@ AUD_TEST(render_errors_are_reported_once) {
   AUD_CHECK(inbox.count(AUD_IO_NOTIFY_RENDER_ERROR) == 2);
   AUD_CHECK(countersOf(stream).render_errors == 4);
   aud_io_session_destroy(session);
+}
+
+// The fast cores are those above the slowest clock (io-003): the big
+// cluster of two, the big and prime cores of three; none on one cluster.
+AUD_TEST(the_fast_cores_lie_above_the_slowest_clock) {
+  const long small = 1900800;
+  const long big = 2361600;
+  AUD_CHECK(aud_io::fastCoresOf({small, small, small, small, big, big, big,
+                                 big}) == 0xf0);
+  AUD_CHECK(aud_io::fastCoresOf({1785600, 1785600, 1785600, 1785600, 2419200,
+                                 2419200, 2419200, 2841600}) == 0xf0);
+  // A core that tells no clock, e.g. offline, is no fast core.
+  AUD_CHECK(aud_io::fastCoresOf({small, small, 0, small, big, 0, big, big}) ==
+            0xd0);
+  AUD_CHECK(aud_io::fastCoresOf({big, big, big, big}) == 0);
+  AUD_CHECK(aud_io::fastCoresOf({0, 0}) == 0);
+  AUD_CHECK(aud_io::fastCoresOf({}) == 0);
+}
+
+// The affinity holds while it allows no core outside the fast ones, also
+// when the kernel leaves out the big cores core control isolates.
+AUD_TEST(an_affinity_within_the_fast_cores_holds) {
+  AUD_CHECK(aud_io::affinityHolds(0xf0, 0xf0));
+  AUD_CHECK(aud_io::affinityHolds(0x60, 0xf0));
+  AUD_CHECK(!aud_io::affinityHolds(0xff, 0xf0));
+  AUD_CHECK(!aud_io::affinityHolds(0x0f, 0xf0));
+  AUD_CHECK(!aud_io::affinityHolds(0, 0xf0));
 }
 
 // The null device leaves the thread where the system put it (io-003); a

@@ -20,6 +20,13 @@
 
 - A stopped stream reports no placement of a thread that no longer runs
 
+- Add the fixes of the review of ticket 30
+
+- fastCoresOf() and affinityHolds() hold the choice of the fast cores and the check of the affinity, with native tests
+- The manager of the performance hint is looked up on the control thread; only the session opens in the first callback, the exception io-003 accepts
+- The counts use bump() of the internal header; named constants for the API level and the cores of the masks, which stay within a cpu_set_t on 32-bit Android
+- The placements are documented as the code sets them; the README names AudIoPlacement
+
 ## 0.3.3 - 2026-10-14
 
 ### Added

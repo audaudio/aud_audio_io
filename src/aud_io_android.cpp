@@ -77,6 +77,16 @@ constexpr double kHintTargetShare = 0.5;
 // How often a callback samples its core and checks that its affinity holds.
 constexpr double kCheckSeconds = 1.0;
 
+// The API level of the performance hint (Android 12).
+constexpr int kHintSdk = 31;
+
+// The cores AudIoCounters.fast_cpus holds, a bit each.
+constexpr unsigned kFastCpuBits = 32;
+
+// The cores the masks of the placement hold: 64, or fewer where a cpu_set_t
+// holds fewer (32 on 32-bit Android).
+constexpr size_t kMaxCpus = CPU_SETSIZE < 64 ? CPU_SETSIZE : 64;
+
 // The performance hint functions of libandroid.so (API 31), loaded at run
 // time so that the library still loads on older systems. The manager and
 // the session are opaque.
@@ -110,7 +120,7 @@ bool loadHintApi(HintApi* api) {
 std::vector<long> maxClocksKhz() {
   std::vector<long> clocks;
   const long cpus = sysconf(_SC_NPROCESSORS_CONF);
-  for (long cpu = 0; cpu < cpus && cpu < CPU_SETSIZE; ++cpu) {
+  for (long cpu = 0; cpu < cpus && size_t(cpu) < kMaxCpus; ++cpu) {
     char path[96];
     std::snprintf(path, sizeof(path),
                   "/sys/devices/system/cpu/cpu%ld/cpufreq/cpuinfo_max_freq",
@@ -125,62 +135,56 @@ std::vector<long> maxClocksKhz() {
   return clocks;
 }
 
-// Moves the audio thread of a device onto the fast cores: the cores whose
-// highest clock lies above the slowest one - the big cluster of two, the big
-// and prime cores of three, where one prime core alone would leave the
-// thread no room to move. From Android 12 a performance hint session learns
-// the work of each callback and lets the system raise the clocks and move
-// the thread; on Android 10 and 11, and where the system makes no session,
-// the thread binds itself to the fast cores. Android resets the affinity of
-// a thread when it moves the app between cpusets - to the background and
-// back -, so a check about once a second binds it again; when the system
-// refuses, the thread runs where the system places it and the refusal is
-// counted. On a device with one cluster nothing changes.
+// Moves the audio thread of a device onto the fast cores (fastCoresOf()).
+// From Android 12 a performance hint session learns the work of each
+// callback and lets the system raise the clocks and move the thread, also
+// on a device with one cluster; below Android 12, and where the system makes
+// no session, the thread binds itself to the fast cores. Android resets the
+// affinity of a thread when it moves the app between cpusets - to the
+// background and back -, so a check about once a second binds it again;
+// when the system refuses, the thread runs where the system places it and
+// the refusal is counted. Below Android 12 a device with one cluster keeps
+// the system's placement.
 class ThreadPlacement {
  public:
   // [control] Before the start: the fast cores, and from Android 12 the
-  // hint functions.
+  // hint functions and their manager, which the first use looks up in the
+  // system.
   void prepare(Placement* placement, double sampleRate, int32_t burstFrames) {
     placement_ = placement;
     checkFrames_ = int64_t(sampleRate * kCheckSeconds);
     burstFrames_ = burstFrames;
     burstNs_ = sampleRate > 0 ? int64_t(burstFrames * 1e9 / sampleRate) : 0;
-    const std::vector<long> clocks = maxClocksKhz();
-    long slowest = 0;
-    for (const long khz : clocks) {
-      if (khz > 0 && (slowest == 0 || khz < slowest)) slowest = khz;
-    }
+    fastBits_ = fastCoresOf(maxClocksKhz());
     CPU_ZERO(&fast_);
-    uint32_t bits = 0;
-    for (size_t cpu = 0; cpu < clocks.size(); ++cpu) {
-      if (clocks[cpu] <= slowest) continue;
-      CPU_SET(cpu, &fast_);
-      if (cpu < 32) bits |= uint32_t{1} << cpu;
+    for (size_t cpu = 0; cpu < kMaxCpus; ++cpu) {
+      if ((fastBits_ >> cpu) & 1) CPU_SET(cpu, &fast_);
     }
-    hasFast_ = CPU_COUNT(&fast_) > 0;
     placement_->mode.store(AUD_IO_PLACEMENT_SYSTEM, std::memory_order_relaxed);
-    placement_->fastCpus.store(bits, std::memory_order_relaxed);
-    hint_ = oboe::getSdkVersion() >= 31 && burstFrames_ > 0 && burstNs_ > 0 &&
-            loadHintApi(&api_);
+    placement_->fastCpus.store(
+        uint32_t(fastBits_ & ((uint64_t{1} << kFastCpuBits) - 1)),
+        std::memory_order_relaxed);
+    const bool hint = oboe::getSdkVersion() >= kHintSdk && burstFrames_ > 0 &&
+                      burstNs_ > 0 && loadHintApi(&api_);
+    manager_ = hint ? api_.getManager() : nullptr;
   }
 
   // [realtime] At the start of each callback. The first one opens the hint
-  // session, which needs the id of the callback thread - a single call to
-  // the system when the stream starts, as Oboe makes it - or binds the
-  // thread to the fast cores.
+  // session or binds the thread to the fast cores.
   void begin() AUD_NONBLOCKING {
     if (placement_ == nullptr) return;
     if (first_) {
       first_ = false;
-      if (hint_) openSession();
-      bind_ = session_ == nullptr && hasFast_;
+      if (manager_ != nullptr) openSession();
+      bind_ = session_ == nullptr && fastBits_ != 0;
       check();
     }
     if (session_ != nullptr) beginNs_ = aud_clock_now_ns();
   }
 
   // [realtime] At the end of each callback of `frames` frames: the work of
-  // the callback to the hint session, scaled to a burst, and the check.
+  // the callback to the hint session, scaled to a burst - a report into the
+  // system, as Oboe's own hint makes it every callback -, and the check.
   void end(int32_t frames) AUD_NONBLOCKING {
     if (placement_ == nullptr) return;
     // Short callbacks, e.g. where a conversion wraps its buffer, say little
@@ -211,19 +215,19 @@ class ThreadPlacement {
   ~ThreadPlacement() { stopped(); }
 
  private:
-  // [realtime] The hint session of this thread, aimed at kHintTargetShare
-  // of a burst; a refusal counts and leaves the affinity.
-  void openSession() AUD_NONBLOCKING {
+  // [realtime, by exception] The hint session of this thread, aimed at
+  // kHintTargetShare of a burst. It needs the id of the callback thread, so
+  // the first callback asks the system for it - one call when the stream
+  // starts, as Oboe makes it (io-003); it is not free of blocking. A refusal
+  // counts and leaves the affinity.
+  void openSession() {
     const int32_t tid = int32_t(gettid());
-    void* manager = api_.getManager();
-    session_ = manager == nullptr
-                   ? nullptr
-                   : api_.createSession(manager, &tid, 1,
-                                        int64_t(burstNs_ * kHintTargetShare));
+    session_ = api_.createSession(manager_, &tid, 1,
+                                  int64_t(burstNs_ * kHintTargetShare));
     if (session_ != nullptr) {
       placement_->mode.store(AUD_IO_PLACEMENT_HINT, std::memory_order_relaxed);
     } else {
-      add(placement_->refusals);
+      bump(placement_->refusals, uint64_t{1});
     }
   }
 
@@ -233,46 +237,40 @@ class ThreadPlacement {
     framesSinceCheck_ = 0;
     const int cpu = sched_getcpu();
     if (cpu >= 0) {
-      add(placement_->samples);
-      if (cpu < CPU_SETSIZE && CPU_ISSET(cpu, &fast_)) {
-        add(placement_->fastSamples);
+      bump(placement_->samples, uint64_t{1});
+      if (size_t(cpu) < kMaxCpus && ((fastBits_ >> cpu) & 1)) {
+        bump(placement_->fastSamples, uint64_t{1});
       }
     }
-    if (!bind_) return;
-    // The affinity holds while it allows no core outside the fast ones. The
-    // kernel leaves out the cores it isolates - Qualcomm's core control
-    // parks big cores while they idle -, so the mask it returns may be
-    // smaller than the one set; comparing them exactly bound the thread
-    // anew every second on the Galaxy Tab S4.
-    cpu_set_t now;
-    if (sched_getaffinity(0, sizeof(now), &now) == 0) {
-      cpu_set_t inside;
-      CPU_AND(&inside, &now, &fast_);
-      if (CPU_COUNT(&now) > 0 && CPU_EQUAL(&inside, &now)) return;
-    }
+    if (!bind_ || affinityHolds(currentAffinity(), fastBits_)) return;
     if (sched_setaffinity(0, sizeof(fast_), &fast_) == 0) {
-      if (bound_) add(placement_->resets);
+      if (bound_) bump(placement_->resets, uint64_t{1});
       bound_ = true;
       placement_->mode.store(AUD_IO_PLACEMENT_AFFINITY,
                              std::memory_order_relaxed);
     } else {
-      add(placement_->refusals);
+      bump(placement_->refusals, uint64_t{1});
       placement_->mode.store(AUD_IO_PLACEMENT_REFUSED,
                              std::memory_order_relaxed);
     }
   }
 
-  // Adds one to a count this thread alone writes; the control thread only
-  // resets it.
-  static void add(std::atomic<uint64_t>& count) {
-    count.store(count.load(std::memory_order_relaxed) + 1,
-                std::memory_order_relaxed);
+  // [realtime] The cores this thread may run on, a bit per core; 0 when the
+  // system does not tell.
+  static uint64_t currentAffinity() AUD_NONBLOCKING {
+    cpu_set_t now;
+    if (sched_getaffinity(0, sizeof(now), &now) != 0) return 0;
+    uint64_t bits = 0;
+    for (size_t cpu = 0; cpu < kMaxCpus; ++cpu) {
+      if (CPU_ISSET(cpu, &now)) bits |= uint64_t{1} << cpu;
+    }
+    return bits;
   }
 
   Placement* placement_ = nullptr;
   HintApi api_;
-  bool hint_ = false;
-  bool hasFast_ = false;
+  void* manager_ = nullptr;
+  uint64_t fastBits_ = 0;
   cpu_set_t fast_{};
   int32_t burstFrames_ = 0;
   int64_t burstNs_ = 0;

@@ -244,13 +244,13 @@ typedef struct AudIoStreamFormat {
 // Where the audio thread of a stream runs (io-003, ticket 30).
 enum {
   // The system places the thread: on iOS, on devices with one cluster of
-  // cores, and before the first callback.
+  // cores below Android 12, before the first callback and after a stop.
   AUD_IO_PLACEMENT_SYSTEM = 0,
   // Android 12 and later: a performance hint session (ADPF) learns the work
   // of each callback and moves the thread to faster cores and clocks.
   AUD_IO_PLACEMENT_HINT = 1,
-  // Android 10 and 11, or without a hint session: the thread is bound to
-  // the cores above the slowest clock.
+  // Below Android 12, or without a hint session: the thread is bound to the
+  // cores above the slowest clock.
   AUD_IO_PLACEMENT_AFFINITY = 2,
   // The system refused the affinity; the thread runs where it places it.
   AUD_IO_PLACEMENT_REFUSED = 3,

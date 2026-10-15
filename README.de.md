@@ -24,7 +24,8 @@ Teil der Audanika Audio Engine; geplant in [aud_audio_pm](https://github.com/aud
 - Der Audio-Thread auf den schnellen Kernen von Android-Geräten (io-003,
   Ticket 30): ab Android 12 eine Performance-Hint-Session, darunter eine
   Affinität zu den Kernen über dem langsamsten Takt;
-  `AudIoCounters.placement` und `fastCpuShare` zeigen, wo er lief
+  `AudIoCounters.placement` (ein `AudIoPlacement`: `system`, `hint`,
+  `affinity` oder `refused`) und `fastCpuShare` zeigen, wo er lief
 
 ## Installation
 
