@@ -17,6 +17,7 @@ import 'aud_io_direction.dart';
 import 'aud_io_native_string.dart';
 import 'aud_io_notification.dart';
 import 'aud_io_performance_mode.dart';
+import 'aud_io_placement.dart';
 import 'aud_io_route.dart';
 import 'aud_io_state.dart';
 import 'aud_io_stream_config.dart';
@@ -99,6 +100,12 @@ extension AudNativeIoCountersToDart on bindings.AudIoCounters {
     recoveryTimeLastNs: recovery_time_last_ns,
     hostTimeJitterMaxNs: host_time_jitter_max_ns,
     lastTime: last_time.toDart(),
+    placement: AudIoPlacement.fromCode(placement),
+    fastCpus: fast_cpus,
+    placementResets: placement_resets,
+    placementRefusals: placement_refusals,
+    cpuSamples: cpu_samples,
+    fastCpuSamples: fast_cpu_samples,
   );
 }
 

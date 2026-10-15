@@ -28,7 +28,7 @@ void main() {
     });
 
     test('the API version is the one the Dart side was written for', () {
-      expect(bindings.AUD_IO_API_VERSION, 2);
+      expect(bindings.AUD_IO_API_VERSION, 3);
     });
   });
 }

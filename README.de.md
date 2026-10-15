@@ -21,6 +21,11 @@ Teil der Audanika Audio Engine; geplant in [aud_audio_pm](https://github.com/aud
 - Streams erholen sich selbst von Verbindungsabbrüchen, Routen- und
   Ratenwechseln und Unterbrechungen und melden jeden Fall (lifecycle-001)
 - Zähler und eine Latenzsonde, die ein Gerät vermessen
+- Der Audio-Thread auf den schnellen Kernen von Android-Geräten (io-003,
+  Ticket 30): ab Android 12 eine Performance-Hint-Session, darunter eine
+  Affinität zu den Kernen über dem langsamsten Takt;
+  `AudIoCounters.placement` (ein `AudIoPlacement`: `system`, `hint`,
+  `affinity` oder `refused`) und `fastCpuShare` zeigen, wo er lief
 
 ## Installation
 

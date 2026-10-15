@@ -18,6 +18,7 @@ export 'src/aud_io_exception.dart';
 export 'src/aud_io_notification.dart';
 export 'src/aud_io_performance_mode.dart';
 export 'src/aud_io_permission.dart';
+export 'src/aud_io_placement.dart';
 export 'src/aud_io_platform.dart';
 export 'src/aud_io_route.dart';
 export 'src/aud_io_session.dart';

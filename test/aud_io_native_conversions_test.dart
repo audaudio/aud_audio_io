@@ -81,7 +81,13 @@ void main() {
         ..callback_time_sum_ns = 50
         ..recovery_time_max_ns = value++
         ..recovery_time_last_ns = value++
-        ..host_time_jitter_max_ns = value++;
+        ..host_time_jitter_max_ns = value++
+        ..placement = bindings.AUD_IO_PLACEMENT_AFFINITY
+        ..fast_cpus = 0xf0
+        ..placement_resets = 2
+        ..placement_refusals = 1
+        ..cpu_samples = 40
+        ..fast_cpu_samples = 30;
       native.ref.last_time
         ..frames = 64
         ..sample_rate = 48000
@@ -121,6 +127,13 @@ void main() {
       expect(counters.lastTime.frames, 64);
       expect(counters.lastTime.samplePosition, 128);
       expect(counters.lastTime.hostTimeSource, AudTimeSource.estimated);
+      expect(counters.placement, AudIoPlacement.affinity);
+      expect(counters.fastCpus, 0xf0);
+      expect(counters.placementResets, 2);
+      expect(counters.placementRefusals, 1);
+      expect(counters.cpuSamples, 40);
+      expect(counters.fastCpuSamples, 30);
+      expect(counters.fastCpuShare, 0.75);
     });
 
     test('the means are 0 without callbacks', () {

@@ -6,6 +6,7 @@
 
 import 'package:aud_audio_core/aud_audio_core.dart';
 
+import 'aud_io_placement.dart';
 import 'aud_io_state.dart';
 
 // #############################################################################
@@ -37,6 +38,12 @@ class AudIoCounters {
     required this.recoveryTimeLastNs,
     required this.hostTimeJitterMaxNs,
     required this.lastTime,
+    this.placement = AudIoPlacement.system,
+    this.fastCpus = 0,
+    this.placementResets = 0,
+    this.placementRefusals = 0,
+    this.cpuSamples = 0,
+    this.fastCpuSamples = 0,
   });
 
   // ...........................................................................
@@ -112,6 +119,26 @@ class AudIoCounters {
   /// The time of the last block.
   final AudStreamTime lastTime;
 
+  /// Where the audio thread runs.
+  final AudIoPlacement placement;
+
+  /// The fast cores of the device, a bit per core: those whose highest clock
+  /// lies above the slowest one; 0 where the device has one cluster or does
+  /// not tell.
+  final int fastCpus;
+
+  /// Times the affinity was set again after the system reset it.
+  final int placementResets;
+
+  /// Times the system refused the affinity or the performance hint.
+  final int placementRefusals;
+
+  /// Callbacks sampled for the core they ran on, about one a second.
+  final int cpuSamples;
+
+  /// Of the [cpuSamples], those on one of the [fastCpus].
+  final int fastCpuSamples;
+
   // ...........................................................................
   /// The mean period between two callbacks.
   double get periodMeanNs => periodCount == 0 ? 0 : periodSumNs / periodCount;
@@ -119,4 +146,9 @@ class AudIoCounters {
   /// The mean time inside the callback.
   double get callbackTimeMeanNs =>
       callbacks == 0 ? 0 : callbackTimeSumNs / callbacks;
+
+  /// The share of the sampled callbacks that ran on a fast core; null where
+  /// no callback was sampled or the device has no fast cores.
+  double? get fastCpuShare =>
+      cpuSamples == 0 || fastCpus == 0 ? null : fastCpuSamples / cpuSamples;
 }

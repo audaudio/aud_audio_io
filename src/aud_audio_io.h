@@ -56,7 +56,7 @@ extern "C" {
 
 // The version of this API; it moves with every change of a struct or a
 // function below.
-#define AUD_IO_API_VERSION 2
+#define AUD_IO_API_VERSION 3
 
 // Capacities of the fixed strings and lists of the structs below.
 #define AUD_IO_MAX_ID 128
@@ -241,6 +241,21 @@ typedef struct AudIoStreamFormat {
   char backend[64];  // e.g. "oboe/aaudio", "miniaudio/Core Audio", "null"
 } AudIoStreamFormat;
 
+// Where the audio thread of a stream runs (io-003, ticket 30).
+enum {
+  // The system places the thread: on iOS, on devices with one cluster of
+  // cores below Android 12, before the first callback and after a stop.
+  AUD_IO_PLACEMENT_SYSTEM = 0,
+  // Android 12 and later: a performance hint session (ADPF) learns the work
+  // of each callback and moves the thread to faster cores and clocks.
+  AUD_IO_PLACEMENT_HINT = 1,
+  // Below Android 12, or without a hint session: the thread is bound to the
+  // cores above the slowest clock.
+  AUD_IO_PLACEMENT_AFFINITY = 2,
+  // The system refused the affinity; the thread runs where it places it.
+  AUD_IO_PLACEMENT_REFUSED = 3,
+};
+
 // The counters of a stream since it opened or since the last reset.
 typedef struct AudIoCounters {
   uint32_t struct_size;
@@ -268,6 +283,17 @@ typedef struct AudIoCounters {
   int64_t recovery_time_last_ns;
   int64_t host_time_jitter_max_ns;  // the largest timestamp deviation
   AudStreamTime last_time;  // the time of the last block
+  // Where the audio thread runs (io-003): an AUD_IO_PLACEMENT_* and the
+  // fast cores of the device, a bit per core (0: unknown or one cluster).
+  // The counts since the last reset: the affinity set again after the
+  // system reset it, the refusals of the system, and the callbacks sampled
+  // for their core - about one a second - and of them those on a fast core.
+  uint32_t placement;
+  uint32_t fast_cpus;
+  uint64_t placement_resets;
+  uint64_t placement_refusals;
+  uint64_t cpu_samples;
+  uint64_t fast_cpu_samples;
 } AudIoCounters;
 
 // Notifications of a session and its streams.
