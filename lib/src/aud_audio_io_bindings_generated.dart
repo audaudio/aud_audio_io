@@ -270,7 +270,7 @@ external int aud_io_thru_render(
   ffi.Pointer<core.AudRenderRequest> request,
 );
 
-const int AUD_IO_API_VERSION = 2;
+const int AUD_IO_API_VERSION = 3;
 
 const int AUD_IO_BACKEND_NULL = 1;
 
@@ -361,6 +361,14 @@ const int AUD_IO_PERMISSION_DENIED = 1;
 const int AUD_IO_PERMISSION_GRANTED = 2;
 
 const int AUD_IO_PERMISSION_UNDETERMINED = 0;
+
+const int AUD_IO_PLACEMENT_AFFINITY = 2;
+
+const int AUD_IO_PLACEMENT_HINT = 1;
+
+const int AUD_IO_PLACEMENT_REFUSED = 3;
+
+const int AUD_IO_PLACEMENT_SYSTEM = 0;
 
 const int AUD_IO_REASON_APP_SUSPENDED = 5;
 
@@ -534,6 +542,29 @@ final class AudIoCounters extends ffi.Struct {
   /// the time of the last block
   external core.AudStreamTime last_time;
 
+  /// Where the audio thread runs (io-003): an AUD_IO_PLACEMENT_* and the
+  /// fast cores of the device, a bit per core (0: unknown or one cluster).
+  /// The counts since the last reset: the affinity set again after the
+  /// system reset it, the refusals of the system, and the callbacks sampled
+  /// for their core - about one a second - and of them those on a fast core.
+  @ffi.Uint32()
+  external int placement;
+
+  @ffi.Uint32()
+  external int fast_cpus;
+
+  @ffi.Uint64()
+  external int placement_resets;
+
+  @ffi.Uint64()
+  external int placement_refusals;
+
+  @ffi.Uint64()
+  external int cpu_samples;
+
+  @ffi.Uint64()
+  external int fast_cpu_samples;
+
   static ffi.Pointer<AudIoCounters> $allocate(
     ffi.Allocator $allocator, {
     required int struct_size,
@@ -561,6 +592,12 @@ final class AudIoCounters extends ffi.Struct {
     required int recovery_time_last_ns,
     required int host_time_jitter_max_ns,
     required core.AudStreamTime last_time,
+    required int placement,
+    required int fast_cpus,
+    required int placement_resets,
+    required int placement_refusals,
+    required int cpu_samples,
+    required int fast_cpu_samples,
   }) => $allocator<AudIoCounters>()
     ..ref.struct_size = struct_size
     ..ref.state = state
@@ -586,7 +623,13 @@ final class AudIoCounters extends ffi.Struct {
     ..ref.recovery_time_max_ns = recovery_time_max_ns
     ..ref.recovery_time_last_ns = recovery_time_last_ns
     ..ref.host_time_jitter_max_ns = host_time_jitter_max_ns
-    ..ref.last_time = last_time;
+    ..ref.last_time = last_time
+    ..ref.placement = placement
+    ..ref.fast_cpus = fast_cpus
+    ..ref.placement_resets = placement_resets
+    ..ref.placement_refusals = placement_refusals
+    ..ref.cpu_samples = cpu_samples
+    ..ref.fast_cpu_samples = fast_cpu_samples;
 }
 
 /// An audio device. Ids are stable while the device is attached: the device

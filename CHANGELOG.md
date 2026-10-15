@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add the audio thread on the fast cores of Android devices
+
+- From Android 12 a performance hint session aimed at half of each burst learns the work of each callback
+- On Android 10 and 11, and without a session, the callback thread binds itself to the cores above the slowest clock and binds again when the system resets it
+- The counters report the placement, the fast cores, the resets, the refusals and the share of sampled callbacks on a fast core (API 3)
+
 ## 0.3.3 - 2026-10-14
 
 ### Added
@@ -20,6 +30,7 @@
 - Add review fixes of ticket 26
 
 - Remove the blank lines between the entries under Unreleased in CHANGELOG.md
+
 
 ## 0.3.1 - 2026-10-12
 

@@ -21,6 +21,10 @@ Part of the Audanika Audio Engine; planned in [aud_audio_pm](https://github.com/
 - Streams recover from disconnects, route and rate changes and
   interruptions on their own and report every case (lifecycle-001)
 - Counters and a latency probe that measure a device
+- The audio thread on the fast cores of Android devices (io-003, ticket
+  30): a performance hint session from Android 12, an affinity to the
+  cores above the slowest clock below; `AudIoCounters.placement` and
+  `fastCpuShare` tell where it ran
 
 ## Installation
 

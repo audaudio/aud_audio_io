@@ -9,7 +9,7 @@
 
 // ignore_for_file: constant_identifier_names
 
-const int AUD_IO_API_VERSION = 2;
+const int AUD_IO_API_VERSION = 3;
 const int AUD_IO_BACKEND_NULL = 1;
 const int AUD_IO_BACKEND_PLATFORM = 0;
 const int AUD_IO_DEVICE_ACTIVE = 4;
@@ -55,6 +55,10 @@ const int AUD_IO_PERFORMANCE_POWER_SAVING = 2;
 const int AUD_IO_PERMISSION_DENIED = 1;
 const int AUD_IO_PERMISSION_GRANTED = 2;
 const int AUD_IO_PERMISSION_UNDETERMINED = 0;
+const int AUD_IO_PLACEMENT_AFFINITY = 2;
+const int AUD_IO_PLACEMENT_HINT = 1;
+const int AUD_IO_PLACEMENT_REFUSED = 3;
+const int AUD_IO_PLACEMENT_SYSTEM = 0;
 const int AUD_IO_REASON_APP_SUSPENDED = 5;
 const int AUD_IO_REASON_BUILTIN_MIC_MUTED = 10;
 const int AUD_IO_REASON_DEVICE_ADDED = 2;

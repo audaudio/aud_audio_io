@@ -14,6 +14,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -599,6 +600,36 @@ AUD_TEST(render_errors_are_reported_once) {
   AUD_CHECK(error.code == AUD_ERROR_FORMAT);
   AUD_CHECK(inbox.count(AUD_IO_NOTIFY_RENDER_ERROR) == 2);
   AUD_CHECK(countersOf(stream).render_errors == 4);
+  aud_io_session_destroy(session);
+}
+
+// The null device leaves the thread where the system put it (io-003); a
+// caller of API 2, whose counters end before the placement, still reads
+// them, and the placement beyond its struct stays untouched.
+AUD_TEST(the_counters_report_the_placement_and_read_for_api_2) {
+  AudIoSession* session = makeSession();
+  Recorder recorder;
+  AudIoStream* stream = open(session, makeConfig(recordRender, &recorder));
+  AUD_CHECK(aud_io_stream_start(stream) == AUD_OK);
+  process(stream, 64, now());
+  const AudIoCounters counters = countersOf(stream);
+  AUD_CHECK(counters.placement == AUD_IO_PLACEMENT_SYSTEM);
+  AUD_CHECK(counters.fast_cpus == 0);
+  AUD_CHECK(counters.placement_resets == 0);
+  AUD_CHECK(counters.placement_refusals == 0);
+  AUD_CHECK(counters.cpu_samples == 0);
+
+  AudIoCounters api2{};
+  api2.struct_size = offsetof(AudIoCounters, placement);
+  api2.placement = 77;
+  AUD_CHECK(aud_io_stream_counters(stream, &api2) == AUD_OK);
+  AUD_CHECK(api2.callbacks == counters.callbacks);
+  AUD_CHECK(api2.placement == 77);
+
+  AudIoCounters tooSmall{};
+  tooSmall.struct_size = offsetof(AudIoCounters, placement) - 1;
+  AUD_CHECK(aud_io_stream_counters(stream, &tooSmall) ==
+            AUD_ERROR_INVALID_ARGUMENT);
   aud_io_session_destroy(session);
 }
 

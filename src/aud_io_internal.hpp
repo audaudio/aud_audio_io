@@ -12,6 +12,7 @@
 #ifndef AUD_IO_INTERNAL_HPP
 #define AUD_IO_INTERNAL_HPP
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -168,6 +169,28 @@ void streamDeviceLost(AudIoStream* stream, uint32_t reason);
 // [any thread but the realtime thread] The route of `stream` changed while
 // the device stayed; the worker reports it. Takes only the worker's lock.
 void streamRouteChanged(AudIoStream* stream, uint32_t reason);
+
+// Where the audio thread of a stream runs (io-003): the device writes it,
+// the counters of the stream read it. The mode and the fast cores outlive
+// a reset of the counters; the counts do not.
+struct Placement {
+  std::atomic<uint32_t> mode{AUD_IO_PLACEMENT_SYSTEM};
+  std::atomic<uint32_t> fastCpus{0};
+  std::atomic<uint64_t> resets{0};
+  std::atomic<uint64_t> refusals{0};
+  std::atomic<uint64_t> samples{0};
+  std::atomic<uint64_t> fastSamples{0};
+
+  void resetCounts() {
+    resets = 0;
+    refusals = 0;
+    samples = 0;
+    fastSamples = 0;
+  }
+};
+
+// [any thread] The placement of `stream`; it lives as long as the stream.
+Placement& streamPlacement(AudIoStream* stream);
 
 // [any thread but the realtime thread] The system took (`began`) or gave
 // back the audio of every stream of the session.

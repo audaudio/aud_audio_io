@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cstddef>
 #include <cstring>
 #include <deque>
 #include <mutex>
@@ -270,6 +271,7 @@ struct AudIoStream {
 
   Realtime rt;
   Counters counters;
+  aud_io::Placement placement;
   TimeCell lastTime;
   AudSpscQueue<Pending> realtimeQueue;
   std::atomic<int32_t> state{AUD_IO_STATE_STOPPED};
@@ -908,6 +910,8 @@ void streamDeviceLost(AudIoStream* stream, uint32_t reason) {
   requestRecovery(stream, reason);
 }
 
+Placement& streamPlacement(AudIoStream* stream) { return stream->placement; }
+
 void streamRouteChanged(AudIoStream* stream, uint32_t reason) {
   {
     std::lock_guard<std::mutex> lock(stream->workerMutex);
@@ -1270,8 +1274,10 @@ AUD_EXPORT int32_t aud_io_stream_acknowledge(AudIoStream* stream,
 
 AUD_EXPORT int32_t aud_io_stream_counters(AudIoStream* stream,
                                           AudIoCounters* out) {
-  if (stream == nullptr || out == nullptr ||
-      out->struct_size < sizeof(AudIoCounters)) {
+  // The counters of API 2 end before the placement (API 3); a caller of API
+  // 2 still gets them.
+  constexpr size_t kApi2Size = offsetof(AudIoCounters, placement);
+  if (stream == nullptr || out == nullptr || out->struct_size < kApi2Size) {
     return AUD_ERROR_INVALID_ARGUMENT;
   }
   const aud_io::Counters& c = stream->counters;
@@ -1317,6 +1323,14 @@ AUD_EXPORT int32_t aud_io_stream_counters(AudIoStream* stream,
   out->recovery_time_last_ns = c.recoveryLast.load(relaxed);
   out->host_time_jitter_max_ns = c.jitterMax.load(relaxed);
   out->last_time = stream->lastTime.load();
+  if (out->struct_size < sizeof(AudIoCounters)) return AUD_OK;
+  const aud_io::Placement& p = stream->placement;
+  out->placement = p.mode.load(relaxed);
+  out->fast_cpus = p.fastCpus.load(relaxed);
+  out->placement_resets = p.resets.load(relaxed);
+  out->placement_refusals = p.refusals.load(relaxed);
+  out->cpu_samples = p.samples.load(relaxed);
+  out->fast_cpu_samples = p.fastSamples.load(relaxed);
   return AUD_OK;
 }
 
@@ -1324,6 +1338,7 @@ AUD_EXPORT int32_t aud_io_stream_reset_counters(AudIoStream* stream) {
   if (stream == nullptr) return AUD_ERROR_INVALID_ARGUMENT;
   std::lock_guard<std::mutex> control(stream->control);
   stream->counters.reset();
+  stream->placement.resetCounts();
   stream->sessionDroppedReset.store(
       stream->session->dropped.load(std::memory_order_relaxed),
       std::memory_order_relaxed);
