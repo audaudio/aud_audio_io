@@ -198,6 +198,10 @@ class ThreadPlacement {
   void stopped() {
     if (session_ != nullptr) api_.closeSession(session_);
     session_ = nullptr;
+    // No thread runs until the next start places its own.
+    if (placement_ != nullptr) {
+      placement_->mode.store(AUD_IO_PLACEMENT_SYSTEM, std::memory_order_relaxed);
+    }
     first_ = true;
     bind_ = false;
     bound_ = false;

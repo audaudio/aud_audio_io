@@ -16,6 +16,10 @@
 
 - The kernel leaves the cores that core control isolates out of the affinity it returns; the check now accepts a mask within the fast cores instead of setting the affinity anew every second
 
+- Add the placement of the system after a stop
+
+- A stopped stream reports no placement of a thread that no longer runs
+
 ## 0.3.3 - 2026-10-14
 
 ### Added
