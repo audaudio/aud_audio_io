@@ -235,10 +235,16 @@ class ThreadPlacement {
       }
     }
     if (!bind_) return;
+    // The affinity holds while it allows no core outside the fast ones. The
+    // kernel leaves out the cores it isolates - Qualcomm's core control
+    // parks big cores while they idle -, so the mask it returns may be
+    // smaller than the one set; comparing them exactly bound the thread
+    // anew every second on the Galaxy Tab S4.
     cpu_set_t now;
-    if (sched_getaffinity(0, sizeof(now), &now) == 0 &&
-        CPU_EQUAL(&now, &fast_)) {
-      return;
+    if (sched_getaffinity(0, sizeof(now), &now) == 0) {
+      cpu_set_t inside;
+      CPU_AND(&inside, &now, &fast_);
+      if (CPU_COUNT(&now) > 0 && CPU_EQUAL(&inside, &now)) return;
     }
     if (sched_setaffinity(0, sizeof(fast_), &fast_) == 0) {
       if (bound_) add(placement_->resets);

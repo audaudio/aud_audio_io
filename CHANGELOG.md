@@ -7,8 +7,14 @@
 - Add the audio thread on the fast cores of Android devices
 
 - From Android 12 a performance hint session aimed at half of each burst learns the work of each callback
+
 - On Android 10 and 11, and without a session, the callback thread binds itself to the cores above the slowest clock and binds again when the system resets it
+
 - The counters report the placement, the fast cores, the resets, the refusals and the share of sampled callbacks on a fast core (API 3)
+
+- Add a check of the affinity that allows isolated cores
+
+- The kernel leaves the cores that core control isolates out of the affinity it returns; the check now accepts a mask within the fast cores instead of setting the affinity anew every second
 
 ## 0.3.3 - 2026-10-14
 
