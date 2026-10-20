@@ -20,8 +20,9 @@ import 'aud_io_stream.dart';
 // #############################################################################
 /// The backends of a session.
 enum AudIoBackend {
-  /// Oboe on Android, miniaudio with AVAudioSession on iOS; the null device
-  /// on the desktop until its backends arrive (S3b to S3d).
+  /// Oboe on Android, miniaudio with AVAudioSession on iOS, miniaudio on the
+  /// devices of the HAL on macOS; the null device on Windows and Linux until
+  /// their backends arrive (S3c, S3d).
   platform(bindings.AUD_IO_BACKEND_PLATFORM),
 
   /// A device that keeps time and takes injected faults, for tests.

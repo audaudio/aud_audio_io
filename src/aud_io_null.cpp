@@ -594,8 +594,11 @@ std::unique_ptr<Backend> createNullBackend(AudIoSession* session,
   return std::make_unique<NullBackend>(session, config);
 }
 
-#if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
-// macOS, Windows and Linux get their devices with S3b to S3d.
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE) && \
+    !AUD_IO_MACOS_DEVICE
+// Windows and Linux get their devices with S3c and S3d; macOS has its own
+// (aud_io_macos.mm) where the hook builds it with AUD_IO_MACOS_DEVICE - the
+// native tests build only the C++ files and keep the null backend.
 std::unique_ptr<Backend> createPlatformBackend(
     AudIoSession* session, const AudIoSessionConfig& config) {
   return createNullBackend(session, config);

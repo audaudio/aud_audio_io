@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add the macOS device on the HAL (ticket 37)
+
+- src/aud_io_macos.mm: miniaudio's Core Audio device on the devices of the HAL
+- The devices with route, channels and rates; defaults followed by reopening
+- Device loss, rate and channel changes, data source and overloads observed
+- Latency estimates from device latency, safety offset and stream latency
+- The hook builds it for macOS; Windows and Linux keep the null device
+
 ## 0.3.4 - 2026-10-15
 
 ### Added
@@ -30,6 +42,7 @@
 
 - The placements are documented as the code sets them; the README names AudIoPlacement
 
+
 ## 0.3.3 - 2026-10-14
 
 ### Added
@@ -50,6 +63,7 @@
 - Add review fixes of ticket 26
 
 - Remove the blank lines between the entries under Unreleased in CHANGELOG.md
+
 
 ## 0.3.1 - 2026-10-12
 
