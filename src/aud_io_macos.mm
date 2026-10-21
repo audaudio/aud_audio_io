@@ -487,25 +487,34 @@ class MacBackend : public Backend {
           return AUD_IO_PERMISSION_UNDETERMINED;
       }
     }
-    // Before macOS 14 the system asks when the input starts.
-    return AUD_IO_PERMISSION_GRANTED;
+    // Before macOS 14 the microphone's authorization of AVCaptureDevice.
+    switch ([AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio]) {
+      case AVAuthorizationStatusAuthorized:
+        return AUD_IO_PERMISSION_GRANTED;
+      case AVAuthorizationStatusDenied:
+      case AVAuthorizationStatusRestricted:
+        return AUD_IO_PERMISSION_DENIED;
+      default:
+        return AUD_IO_PERMISSION_UNDETERMINED;
+    }
   }
 
   int32_t requestPermission() override {
+    // The user may answer after the session is gone.
+    std::shared_ptr<Guard> guard = guard_;
+    void (^answer)(BOOL) = ^(BOOL granted) {
+      std::lock_guard<std::mutex> lock(guard->mutex);
+      if (guard->backend == nullptr) return;
+      sessionPermissionChanged(guard->backend->session(),
+                               granted ? AUD_IO_PERMISSION_GRANTED
+                                       : AUD_IO_PERMISSION_DENIED);
+    };
     if (@available(macOS 14.0, *)) {
-      // The user may answer after the session is gone.
-      std::shared_ptr<Guard> guard = guard_;
-      [AVAudioApplication requestRecordPermissionWithCompletionHandler:^(
-                              BOOL granted) {
-        std::lock_guard<std::mutex> lock(guard->mutex);
-        if (guard->backend == nullptr) return;
-        sessionPermissionChanged(guard->backend->session(),
-                                 granted ? AUD_IO_PERMISSION_GRANTED
-                                         : AUD_IO_PERMISSION_DENIED);
-      }];
+      [AVAudioApplication requestRecordPermissionWithCompletionHandler:answer];
       return AUD_OK;
     }
-    sessionPermissionChanged(session_, AUD_IO_PERMISSION_GRANTED);
+    [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio
+                             completionHandler:answer];
     return AUD_OK;
   }
 
@@ -545,8 +554,10 @@ class MacBackend : public Backend {
     std::vector<Listener> unused;
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      devices_.erase(std::remove(devices_.begin(), devices_.end(), device),
-                     devices_.end());
+      const auto it = std::find(devices_.begin(), devices_.end(), device);
+      // A device whose open failed was never registered nor watched.
+      if (it == devices_.end()) return;
+      devices_.erase(it);
       for (AudioObjectID id : {device->output(), device->input()}) {
         if (id != kAudioObjectUnknown) unwatch(id, unused);
       }

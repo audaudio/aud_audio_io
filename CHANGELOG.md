@@ -22,6 +22,10 @@
 
 - Add the macOS device to the index
 
+- Add the microphone permission before macOS 14
+- Before macOS 14 the permission comes from AVCaptureDevice instead of always being granted
+- A device whose open failed no longer removes the listeners of another stream on the same device
+
 ## 0.3.4 - 2026-10-15
 
 ### Added
