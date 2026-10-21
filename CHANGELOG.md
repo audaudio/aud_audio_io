@@ -7,10 +7,18 @@
 - Add the macOS device on the HAL (ticket 37)
 
 - src/aud_io_macos.mm: miniaudio's Core Audio device on the devices of the HAL
+
 - The devices with route, channels and rates; defaults followed by reopening
+
 - Device loss, rate and channel changes, data source and overloads observed
+
 - Latency estimates from device latency, safety offset and stream latency
+
 - The hook builds it for macOS; Windows and Linux keep the null device
+
+- Add macOS to the German README (ticket 37)
+
+- The German goals name the macOS device as the English ones do
 
 ## 0.3.4 - 2026-10-15
 

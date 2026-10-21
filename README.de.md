@@ -11,8 +11,9 @@ Teil der Audanika Audio Engine; geplant in [aud_audio_pm](https://github.com/aud
 ## Ziele
 
 - Ein Stream für Ausgabe, Eingabe und Vollduplex auf iOS und Android
-  (Ticket 21, Schritt S3); macOS, Windows und Linux folgen mit S3b bis S3d
-  und laufen bis dahin auf dem Null-Gerät
+  (Ticket 21, Schritt S3) und auf macOS (Ticket 37, der macOS-Teil von
+  S3b); Windows und Linux folgen mit S3c und S3d und laufen bis dahin auf
+  dem Null-Gerät
 - Blöcke von höchstens `maxFrames` Frames, jeder mit seiner
   `AudStreamTime`: Sample-Position, Host-Zeit mit Quelle und Genauigkeit,
   Latenz je Richtung (Entscheidung time-001)
