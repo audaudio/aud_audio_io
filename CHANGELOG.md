@@ -20,6 +20,8 @@
 
 - The German goals name the macOS device as the English ones do
 
+- Add the macOS device to the index
+
 ## 0.3.4 - 2026-10-15
 
 ### Added
