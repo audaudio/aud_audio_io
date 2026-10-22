@@ -288,21 +288,10 @@ AUD_TEST(hal_a_duplex_stream_weighs_each_device_by_its_own_rate) {
 // ############################################################################
 // Reports
 
-// A device reports one loss, the first; no loss is none to report.
-AUD_TEST(hal_a_device_reports_its_loss_once) {
-  hal::LossReport report;
-  AUD_CHECK(!report.take(AUD_IO_REASON_NONE));
-  AUD_CHECK(report.take(AUD_IO_REASON_SAMPLE_RATE));
-  AUD_CHECK(!report.take(AUD_IO_REASON_SAMPLE_RATE));
-  AUD_CHECK(!report.take(AUD_IO_REASON_DEVICE_REMOVED));
-  AUD_CHECK(report.reason == AUD_IO_REASON_SAMPLE_RATE);
-}
-
 // Unplugging the default output reaches the backend three times - the
-// device list, the default output and the device's presence -; the stream
-// hears of it once, with the reason of the first, and does not close the
-// device it reopened meanwhile.
-AUD_TEST(hal_one_unplug_of_the_default_output_reaches_the_stream_once) {
+// device list, the default output and the device's presence -, each a
+// loss of the same device; the stream reopens it once (aud_io_test.cpp).
+AUD_TEST(hal_one_unplug_of_the_default_output_is_lost_three_times) {
   const uint32_t unplugged = 10;
   const uint32_t speaker = 11;
   const aud_io::DeviceRequest request = anyDevice(AUD_IO_OUTPUT);
@@ -318,15 +307,8 @@ AUD_TEST(hal_one_unplug_of_the_default_output_reaches_the_stream_once) {
   }
   losses.push_back(hal::lossOf(kDeviceIsAlive, gone, useOf(AUD_IO_OUTPUT),
                                request, format));
-  hal::LossReport report;
-  std::vector<uint32_t> reported;
-  for (const uint32_t loss : losses) {
-    if (report.take(loss)) reported.push_back(loss);
-  }
   const std::vector<uint32_t> each = {AUD_IO_REASON_DEVICE_REMOVED,
                                       AUD_IO_REASON_ROUTE_OVERRIDE,
                                       AUD_IO_REASON_DEVICE_REMOVED};
-  const std::vector<uint32_t> once = {AUD_IO_REASON_DEVICE_REMOVED};
   AUD_CHECK(losses == each);
-  AUD_CHECK(reported == once);
 }

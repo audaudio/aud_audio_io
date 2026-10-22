@@ -324,10 +324,9 @@ class MacDevice : public Device {
   }
 
   // [under the backend's mutex_] Reports the loss `reason` to the stream,
-  // only the first one (hal::LossReport).
-  void lost(uint32_t reason) {
-    if (loss_.take(reason)) streamDeviceLost(stream_, reason);
-  }
+  // which drops it once it no longer runs on this device: one loss reaches
+  // the backend more than once.
+  void lost(uint32_t reason) { streamDeviceLost(stream_, *this, reason); }
 
   // [control] Reads the latencies of the devices for the audio thread.
   void readLatencies() {
@@ -395,7 +394,6 @@ class MacDevice : public Device {
   // The nominal rates of the devices when they opened.
   double outputRate_ = 0;
   double inputRate_ = 0;
-  hal::LossReport loss_;  // under the backend's mutex_
   std::atomic<int64_t> outputNs_{0};
   std::atomic<int64_t> inputNs_{0};
   std::atomic<uint64_t> xruns_{0};

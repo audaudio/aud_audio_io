@@ -228,7 +228,7 @@ class NullBackend : public Backend {
       // as its device is registered here, and the stream functions take no
       // lock of the stream's control.
       std::lock_guard<std::mutex> lock(mutex_);
-      std::vector<AudIoStream*> lost;
+      std::vector<const NullDevice*> lost;
       std::vector<AudIoStream*> routed;
       switch (fault) {
         case AUD_IO_FAULT_DISCONNECT:
@@ -272,7 +272,7 @@ class NullBackend : public Backend {
               if (device->format().outputId == id ||
                   device->format().inputId == id) {
                 device->lose();
-                lost.push_back(device->stream());
+                lost.push_back(device);
               }
             }
           }
@@ -312,7 +312,9 @@ class NullBackend : public Backend {
         default:
           return AUD_ERROR_INVALID_ARGUMENT;
       }
-      for (AudIoStream* stream : lost) streamDeviceLost(stream, reason);
+      for (const NullDevice* device : lost) {
+        streamDeviceLost(device->stream(), *device, reason);
+      }
       for (AudIoStream* stream : routed) {
         streamRouteChanged(stream, AUD_IO_REASON_ROUTE_OVERRIDE);
       }
@@ -405,10 +407,10 @@ class NullBackend : public Backend {
   }
 
   // Marks every open device as gone; the lock is held.
-  void loseAll(std::vector<AudIoStream*>& lost) {
+  void loseAll(std::vector<const NullDevice*>& lost) {
     for (NullDevice* device : devices_) {
       device->lose();
-      lost.push_back(device->stream());
+      lost.push_back(device);
     }
   }
 

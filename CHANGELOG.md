@@ -29,10 +29,23 @@
 - A device whose open failed no longer removes the listeners of another stream on the same device
 
 - Add tests for the macOS backend's loss and rate decisions
+
 - One unplug reaches the stream once: a device reports only its first loss, a later report of the device list, the default or IsAlive closed the device the stream had just reopened
+
 - A rate change reopens only a stream that asked for no rate, weighed by each device's own rate at open instead of the stream's, so a duplex input no longer counts against its output
+
 - The decisions on the HAL's devices live in hal:: of aud_io_internal.hpp: rates, routes, lost devices, the default device, the loss of a changed property and the single loss report
+
 - test/native/aud_io_macos_test.cpp covers them in the native tests
+
+- Add the device serial that ties a loss to its device
+- Every device gets a serial when it opens and names itself in streamDeviceLost; the worker drops a recovery for a device the stream no longer runs on, so a second or late report of one loss no longer closes the device the stream had reopened
+- This covers every backend: two route changes or a route change and the media services reset on iOS, the device list, the default and IsAlive on macOS, both Oboe streams of a duplex device on Android, and a loss that arrives after the end of an interruption or a failed start replaced the device
+- Pending recoveries merge: the first report of one device stands, a newer device's replaces it, a start that names no device always runs
+- The per-device LossReport of the macOS backend is gone: the stream decides for all backends
+- iOS reports the reset of the media services through its devices; sessionAllDevicesLost is gone
+- What the iOS backend decides on a route change lives in ios:: of aud_io_internal.hpp: why it changed and when a device reopens; test/native/aud_io_ios_test.cpp covers it
+- Native tests: two losses of one device disconnect once, a late loss of a replaced device keeps the new one, the new device's own loss still recovers
 
 ## 0.3.4 - 2026-10-15
 

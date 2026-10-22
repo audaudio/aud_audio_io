@@ -86,6 +86,8 @@ struct DeviceRequest {
 // callback runs afterwards.
 class Device {
  public:
+  Device() : serial_(nextSerial()) {}
+
   virtual ~Device() = default;
 
   // [control] Starts the callbacks.
@@ -99,6 +101,19 @@ class Device {
 
   // [control] The underruns and overruns the backend counted.
   virtual uint64_t xruns() const { return 0; }
+
+  // [any thread] The number of the device, higher with every device opened
+  // in the process. A loss report names its device by it, so that the
+  // stream drops the report of a device it closed or replaced already.
+  uint64_t serial() const { return serial_; }
+
+ private:
+  static uint64_t nextSerial() {
+    static std::atomic<uint64_t> next{1};
+    return next.fetch_add(1, std::memory_order_relaxed);
+  }
+
+  const uint64_t serial_;
 };
 
 // The devices of a platform. One backend per session.
@@ -163,11 +178,17 @@ std::unique_ptr<Backend> createPlatformBackend(
 void streamProcess(AudIoStream* stream, const float* input, float* output,
                    uint32_t frames, const DeviceTime& time) AUD_NONBLOCKING;
 
-// [any thread but the realtime thread] The device of `stream` went away or
-// changed; the worker of the stream recovers. Takes only the worker's lock,
+// [any thread but the realtime thread] The device `device` of `stream` went
+// away or changed; the worker of the stream recovers, unless the stream no
+// longer runs on that device: one loss may be reported more than once - on
+// macOS the device list, the default device and the device's presence each
+// tell of an unplug, on iOS one route change follows another, on Android
+// both streams of a duplex device -, and a later report would close the
+// device the stream had reopened meanwhile. Takes only the worker's lock,
 // so a backend may call it under its own lock - the lock that keeps the
 // stream alive while its device is registered.
-void streamDeviceLost(AudIoStream* stream, uint32_t reason);
+void streamDeviceLost(AudIoStream* stream, const Device& device,
+                      uint32_t reason);
 
 // [any thread but the realtime thread] The route of `stream` changed while
 // the device stayed; the worker reports it. Takes only the worker's lock.
@@ -253,10 +274,6 @@ void sessionDevicesChanged(AudIoSession* session);
 // [any thread but the realtime thread] The microphone permission was
 // answered.
 void sessionPermissionChanged(AudIoSession* session, int32_t permission);
-
-// [any thread but the realtime thread] Reports every stream of the session
-// as lost, e.g. after the media services of iOS were reset.
-void sessionAllDevicesLost(AudIoSession* session, uint32_t reason);
 
 // Copies `value` into the fixed string `out` of `capacity` bytes.
 void copyString(char* out, size_t capacity, const std::string& value);
@@ -428,27 +445,64 @@ inline uint32_t lossOf(uint32_t property, const DeviceProperties& now,
                                    : AUD_IO_REASON_NONE;
 }
 
-// The loss of a device, reported to its stream once. One unplug reaches
-// the backend up to three times - the device list, the default device and
-// the device's presence each tell of it -; the stream closes the device on
-// the first report and opens the next one only once the device is gone, so
-// a later report adds nothing: it would close the device the stream had
-// reopened meanwhile.
-struct LossReport {
-  // Takes the loss `loss`, an AUD_IO_REASON_*, AUD_IO_REASON_NONE for none;
-  // returns whether it goes to the stream: only the first one does.
-  bool take(uint32_t loss) {
-    if (loss == AUD_IO_REASON_NONE || reason != AUD_IO_REASON_NONE) {
-      return false;
-    }
-    reason = loss;
-    return true;
-  }
+}  // namespace hal
 
-  uint32_t reason = AUD_IO_REASON_NONE;  // the loss that went to the stream
+// ............................................................................
+// The decisions of the iOS backend
+//
+// What aud_io_ios.mm decides about the routes of the AVAudioSession, kept
+// apart from the session, so that the native tests reach it on every
+// platform. The reasons of a route change are the session's
+// AVAudioSessionRouteChangeReason values, which aud_io_ios.mm checks
+// against AVFoundation.
+
+namespace ios {
+
+// The reasons of a route change that tell of a device.
+constexpr uint64_t kNewDeviceAvailable = 1;
+constexpr uint64_t kOldDeviceUnavailable = 2;
+
+// Why the route changed, an AUD_IO_REASON_*, by the session's reason
+// `change`.
+inline uint32_t reasonOf(uint64_t change) {
+  if (change == kOldDeviceUnavailable) return AUD_IO_REASON_DEVICE_REMOVED;
+  if (change == kNewDeviceAvailable) return AUD_IO_REASON_DEVICE_ADDED;
+  return AUD_IO_REASON_ROUTE_OVERRIDE;
+}
+
+// What the session tells of the route after it changed.
+struct Route {
+  double rate = 0;       // the hardware's rate; 0: unknown
+  uint32_t outputs = 0;  // the channels per direction
+  uint32_t inputs = 0;
+  std::string output;  // the UID of the first port per direction
+  std::string input;
 };
 
-}  // namespace hal
+// Why a device reopens after the route changed for `why`, an
+// AUD_IO_REASON_*, AUD_IO_REASON_NONE while it keeps running: a stream
+// that follows the hardware reopens for a new rate, as on macOS, or a new
+// channel count, one with input on the new input; iOS moves the output
+// itself, so the output reopens only once the old one is gone.
+inline uint32_t lossOf(uint32_t why, const Route& now,
+                       const DeviceRequest& request,
+                       const DeviceFormat& format) {
+  const bool output = format.outputChannels > 0;
+  const bool input = format.inputChannels > 0;
+  const bool rate = hal::reopensForRate(request, format.sampleRate, now.rate);
+  const bool outputs =
+      output && request.outputChannels == 0 &&
+      std::min(now.outputs, kDefaultChannels) != format.outputChannels;
+  const bool inputs =
+      input && request.inputChannels == 0 &&
+      std::min(now.inputs, kDefaultChannels) != format.inputChannels;
+  const bool moved = (input && format.inputId != now.input) ||
+                     (output && format.outputId != now.output &&
+                      why == AUD_IO_REASON_DEVICE_REMOVED);
+  return rate || outputs || inputs || moved ? why : AUD_IO_REASON_NONE;
+}
+
+}  // namespace ios
 
 }  // namespace aud_io
 

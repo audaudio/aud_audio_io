@@ -43,6 +43,10 @@ constexpr uint32_t kDefaultRecoveryTimeoutMs = 5000;
 // The waits between two attempts to reopen a device; the last repeats.
 constexpr int64_t kBackoffMs[] = {0, 10, 20, 50, 100, 200, 400};
 
+// The serial of a recovery that names no device (Device::serial): whatever
+// the stream runs on reopens.
+constexpr uint64_t kAnyDevice = 0;
+
 // The weight of a new deviation in the mean deviation of the host times.
 constexpr double kJitterWeight = 1.0 / 16.0;
 
@@ -264,6 +268,7 @@ struct AudIoStream {
   bool recoverPending = false;
   uint32_t recoverReason = AUD_IO_REASON_NONE;
   int64_t recoverCauseNs = 0;
+  uint64_t recoverDevice = aud_io::kAnyDevice;  // Device::serial of the loss
   bool interruptBeginPending = false;
   bool interruptEndPending = false;
   uint32_t interruptReason = AUD_IO_REASON_NONE;
@@ -729,8 +734,19 @@ void reopen(AudIoStream* stream, std::unique_lock<std::mutex>& control,
 // ............................................................................
 // The worker
 
-void handleRecovery(AudIoStream* stream, uint32_t reason, int64_t causeNs) {
+// Whether the device `device` (Device::serial) is the one the stream runs
+// on, or the recovery names none; the control lock is held. A device that
+// an earlier recovery, the end of an interruption or a failed start closed
+// or replaced is not: its loss is no longer the stream's.
+bool runsOn(AudIoStream* stream, uint64_t device) {
+  if (device == kAnyDevice) return true;
+  return stream->device != nullptr && stream->device->serial() == device;
+}
+
+void handleRecovery(AudIoStream* stream, uint32_t reason, int64_t causeNs,
+                    uint64_t device) {
   std::unique_lock<std::mutex> control(stream->control);
+  if (!runsOn(stream, device)) return;
   if (reason != AUD_IO_REASON_REQUEST) {
     stream->counters.disconnects.fetch_add(1, std::memory_order_relaxed);
     post(stream->session,
@@ -809,6 +825,7 @@ void workerLoop(AudIoStream* stream) {
     const bool recover = stream->recoverPending;
     const uint32_t reason = stream->recoverReason;
     const int64_t causeNs = stream->recoverCauseNs;
+    const uint64_t device = stream->recoverDevice;
     const bool begin = stream->interruptBeginPending;
     const bool end = stream->interruptEndPending;
     const uint32_t interruptReason = stream->interruptReason;
@@ -820,19 +837,29 @@ void workerLoop(AudIoStream* stream) {
     stream->routePending = false;
     lock.unlock();
     if (begin) handleInterruptBegin(stream, interruptReason);
-    if (recover) handleRecovery(stream, reason, causeNs);
+    if (recover) handleRecovery(stream, reason, causeNs, device);
     if (route) handleRouteChanged(stream, routeReason);
     if (end) handleInterruptEnd(stream);
     lock.lock();
   }
 }
 
-void requestRecovery(AudIoStream* stream, uint32_t reason) {
+// Asks the worker to reopen the device `device` (Device::serial), kAnyDevice
+// for whatever the stream runs on. Requests merge while one is pending: the
+// first of one device stands, one of a newer device replaces it - the older
+// device is closed already or about to be -, and one that names no device
+// runs in any case.
+void requestRecovery(AudIoStream* stream, uint32_t reason, uint64_t device) {
   {
     std::lock_guard<std::mutex> lock(stream->workerMutex);
-    if (!stream->recoverPending) {
+    const uint64_t pending = stream->recoverDevice;
+    const bool replaces =
+        !stream->recoverPending ||
+        (pending != kAnyDevice && (device == kAnyDevice || device > pending));
+    if (replaces) {
       stream->recoverCauseNs = nowNs();
       stream->recoverReason = reason;
+      stream->recoverDevice = device;
     }
     stream->recoverPending = true;
   }
@@ -884,8 +911,9 @@ bool validConfig(const AudIoStreamConfig* config) {
 // ............................................................................
 // What the backends call
 
-void streamDeviceLost(AudIoStream* stream, uint32_t reason) {
-  requestRecovery(stream, reason);
+void streamDeviceLost(AudIoStream* stream, const Device& device,
+                      uint32_t reason) {
+  requestRecovery(stream, reason, device.serial());
 }
 
 Placement& streamPlacement(AudIoStream* stream) { return stream->placement; }
@@ -916,13 +944,6 @@ void sessionPermissionChanged(AudIoSession* session, int32_t permission) {
       makeNotification(AUD_IO_NOTIFY_PERMISSION, 0, AUD_IO_REASON_NONE);
   notification.code = permission;
   post(session, notification);
-}
-
-void sessionAllDevicesLost(AudIoSession* session, uint32_t reason) {
-  std::lock_guard<std::mutex> lock(session->streamsMutex);
-  for (AudIoStream* stream : session->streams) {
-    requestRecovery(stream, reason);
-  }
 }
 
 void copyString(char* out, size_t capacity, const std::string& value) {
@@ -1178,7 +1199,7 @@ AUD_EXPORT int32_t aud_io_stream_start(AudIoStream* stream) {
   }
   if (stream->device == nullptr) {
     stream->state.store(AUD_IO_STATE_RECOVERING, std::memory_order_release);
-    aud_io::requestRecovery(stream, AUD_IO_REASON_REQUEST);
+    aud_io::requestRecovery(stream, AUD_IO_REASON_REQUEST, aud_io::kAnyDevice);
     return AUD_OK;
   }
   const int32_t result = aud_io::startDevice(stream, 0);

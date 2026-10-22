@@ -297,14 +297,10 @@ class Callbacks : public oboe::AudioStreamDataCallback,
                                         void* audioData,
                                         int32_t numFrames) override;
 
+  // [Oboe's error thread] Each stream of a duplex device reports its own
+  // error; the stream reopens the device once (streamDeviceLost).
   void onErrorAfterClose(oboe::AudioStream* oboeStream,
-                         oboe::Result error) override {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (stream_ == nullptr) return;
-    streamDeviceLost(stream_, error == oboe::Result::ErrorDisconnected
-                                  ? AUD_IO_REASON_DEVICE_REMOVED
-                                  : AUD_IO_REASON_ERROR);
-  }
+                         oboe::Result error) override;
 
   // [control] The device closes: no data callback runs any more, and an
   // error that arrives late finds no stream.
@@ -662,6 +658,16 @@ oboe::DataCallbackResult Callbacks::onAudioReady(oboe::AudioStream* oboeStream,
     device->inputReady(static_cast<const float*>(audioData), numFrames);
   }
   return oboe::DataCallbackResult::Continue;
+}
+
+void Callbacks::onErrorAfterClose(oboe::AudioStream* oboeStream,
+                                  oboe::Result error) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (stream_ == nullptr) return;
+  streamDeviceLost(stream_, *device_.load(std::memory_order_acquire),
+                   error == oboe::Result::ErrorDisconnected
+                       ? AUD_IO_REASON_DEVICE_REMOVED
+                       : AUD_IO_REASON_ERROR);
 }
 
 oboe::ResultWithValue<int32_t> Duplex::readInput(int32_t numFrames) {
