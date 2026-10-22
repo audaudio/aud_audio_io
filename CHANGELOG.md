@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Build and test aud_audio_io on Windows
+
 ## 0.3.5 - 2026-10-22
 
 ### Added
@@ -54,6 +60,7 @@
 
 - Native tests: two losses of one device disconnect once, a late loss of a replaced device keeps the new one, the new device's own loss still recovers
 
+
 ## 0.3.4 - 2026-10-15
 
 ### Added
@@ -84,6 +91,7 @@
 
 - The placements are documented as the code sets them; the README names AudIoPlacement
 
+
 ## 0.3.3 - 2026-10-14
 
 ### Added
@@ -104,6 +112,7 @@
 - Add review fixes of ticket 26
 
 - Remove the blank lines between the entries under Unreleased in CHANGELOG.md
+
 
 ## 0.3.1 - 2026-10-12
 
