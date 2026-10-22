@@ -6,7 +6,7 @@
 
 {
   "name": "aud_audio_io",
-  "summary": "Audio device IO of the Audanika Audio Engine: session, devices, hot-plug, output/input/duplex streams calling an AudRenderFunction with AudStreamTime; recovery from disconnects, route/rate changes, interruptions; Oboe on Android, miniaudio + AVAudioSession on iOS, null device elsewhere (S3b-S3d).",
+  "summary": "Audio device IO of the Audanika Audio Engine: session, devices, hot-plug, output/input/duplex streams calling an AudRenderFunction with AudStreamTime; recovery from disconnects, route/rate changes, interruptions; Oboe on Android, miniaudio + AVAudioSession on iOS, miniaudio on the Core Audio HAL on macOS (S3b), null device on Windows and Linux (S3c, S3d).",
   "domain": [
     "Audio device IO of the Audanika Audio Engine",
     "Stream timing (time-001), lifecycle per platform (lifecycle-001)",

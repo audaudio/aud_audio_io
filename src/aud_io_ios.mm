@@ -15,7 +15,10 @@
 // through atomics (time-001, ticket 21 decision 2: a RemoteIO path follows
 // in S15 if the measured error exceeds 1 ms). The block of the callback,
 // not the session's IO buffer: the simulator calls back with 512 frames
-// while it reports a buffer of 256. Objective-C++ with ARC.
+// while it reports a buffer of 256. What the backend decides on a route
+// change - why it changed and when a device reopens - lives in ios:: of
+// aud_io_internal.hpp, where the native tests reach it. Objective-C++ with
+// ARC.
 
 #include <TargetConditionals.h>
 
@@ -53,6 +56,12 @@ namespace {
 constexpr double kFallbackRate = 48000;
 // The low-latency default of the IO buffer: 256 frames at 48 kHz, 5.3 ms.
 constexpr double kDefaultBufferSeconds = 256.0 / 48000.0;
+
+// ios:: names the reasons of a route change by plain integers.
+static_assert(ios::kNewDeviceAvailable ==
+              AVAudioSessionRouteChangeReasonNewDeviceAvailable);
+static_assert(ios::kOldDeviceUnavailable ==
+              AVAudioSessionRouteChangeReasonOldDeviceUnavailable);
 
 std::string stringOf(NSString* value) {
   return value == nil ? std::string() : std::string(value.UTF8String);
@@ -164,6 +173,11 @@ class IosDevice : public Device {
 
   AudIoStream* stream() const { return stream_; }
   const DeviceRequest& request() const { return request_; }
+
+  // [under the backend's mutex_] Reports the loss `reason` to the stream,
+  // which drops it once it no longer runs on this device: one loss reaches
+  // the backend more than once.
+  void lost(uint32_t reason) { streamDeviceLost(stream_, *this, reason); }
 
   // [control] Reads the latencies of the session for the audio thread.
   void readLatencies() {
@@ -483,18 +497,14 @@ class IosBackend : public Backend {
   }
 
   void routeChanged(NSUInteger reason) {
-    const uint32_t why =
-        reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable
-            ? AUD_IO_REASON_DEVICE_REMOVED
-        : reason == AVAudioSessionRouteChangeReasonNewDeviceAvailable
-            ? AUD_IO_REASON_DEVICE_ADDED
-            : AUD_IO_REASON_ROUTE_OVERRIDE;
+    const uint32_t why = ios::reasonOf(reason);
     AVAudioSession* session = [AVAudioSession sharedInstance];
-    const double rate = session.sampleRate;
-    const uint32_t outputs = uint32_t(session.outputNumberOfChannels);
-    const uint32_t inputs = uint32_t(session.inputNumberOfChannels);
-    const std::string output = currentPort(true);
-    const std::string input = currentPort(false);
+    ios::Route now;
+    now.rate = session.sampleRate;
+    now.outputs = uint32_t(session.outputNumberOfChannels);
+    now.inputs = uint32_t(session.inputNumberOfChannels);
+    now.output = currentPort(true);
+    now.input = currentPort(false);
     {
       // Under the lock: a stream lives at least as long as its device is
       // registered, and the stream functions take no lock of the stream's
@@ -502,27 +512,10 @@ class IosBackend : public Backend {
       std::lock_guard<std::mutex> lock(mutex_);
       for (IosDevice* device : devices_) {
         device->readLatencies();
-        const DeviceFormat& format = device->format();
-        const DeviceRequest& request = device->request();
-        // A device that follows the hardware reopens for a new rate or a
-        // new channel count; a gone input reopens on the new one.
-        bool lost = request.sampleRate == 0 && rate > 0 &&
-                    std::fabs(rate - format.sampleRate) > 0.5;
-        if (format.outputChannels > 0 && request.outputChannels == 0 &&
-            std::min(outputs, kDefaultChannels) != format.outputChannels) {
-          lost = true;
-        }
-        if (format.inputChannels > 0 && request.inputChannels == 0 &&
-            std::min(inputs, kDefaultChannels) != format.inputChannels) {
-          lost = true;
-        }
-        if (format.inputChannels > 0 && format.inputId != input) lost = true;
-        if (format.outputChannels > 0 && format.outputId != output &&
-            why == AUD_IO_REASON_DEVICE_REMOVED) {
-          lost = true;
-        }
-        if (lost) {
-          streamDeviceLost(device->stream(), why);
+        const uint32_t lost =
+            ios::lossOf(why, now, device->request(), device->format());
+        if (lost != AUD_IO_REASON_NONE) {
+          device->lost(lost);
         } else {
           streamRouteChanged(device->stream(), why);
         }
@@ -555,9 +548,13 @@ class IosBackend : public Backend {
 
   void mediaServicesReset() {
     // Every audio object of the app is gone: configure the session again
-    // and open every device anew.
+    // and open every device anew. Through the devices, so that the reset
+    // and a route change that tell of one device reopen it once.
     configure(usesInput_);
-    sessionAllDevicesLost(session_, AUD_IO_REASON_MEDIA_SERVICES_RESET);
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (IosDevice* device : devices_) {
+      device->lost(AUD_IO_REASON_MEDIA_SERVICES_RESET);
+    }
   }
 
   void becameActive() {

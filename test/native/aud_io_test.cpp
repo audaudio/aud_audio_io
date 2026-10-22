@@ -796,6 +796,69 @@ AUD_TEST(a_recovery_is_reported_once_the_device_runs) {
   aud_io_session_destroy(session);
 }
 
+// Two losses of one device - its disconnect and the rate it comes back
+// with - disconnect the stream once, whether the worker took the first one
+// already or not: the second names a device the stream closed.
+AUD_TEST(two_losses_of_one_device_disconnect_once) {
+  AudIoSession* session = makeSession(0);
+  Inbox inbox(session);
+  AudIoStream* stream =
+      open(session, makeConfig(aud_io_sine_render, nullptr));
+  AUD_CHECK(aud_io_stream_start(stream) == AUD_OK);
+  // Away for 200 ms: no new device opens before both losses.
+  AUD_CHECK(aud_io_null_inject(session, AUD_IO_FAULT_DISCONNECT, 200) ==
+            AUD_OK);
+  AUD_CHECK(aud_io_null_inject(session, AUD_IO_FAULT_SAMPLE_RATE, 96000) ==
+            AUD_OK);
+  AudIoNotification lost{};
+  AUD_CHECK(inbox.waitFor(AUD_IO_NOTIFY_DISCONNECTED, &lost));
+  AUD_CHECK(lost.reason == AUD_IO_REASON_DEVICE_REMOVED);
+  AudIoNotification changed{};
+  AUD_CHECK(inbox.waitFor(AUD_IO_NOTIFY_FORMAT_CHANGED, &changed));
+  AUD_CHECK(changed.sample_rate == 96000);
+  AUD_CHECK(waitState(stream, AUD_IO_STATE_RUNNING));
+  sleepMs(20);
+  AUD_CHECK(inbox.count(AUD_IO_NOTIFY_DISCONNECTED) == 1);
+  AUD_CHECK(countersOf(stream).disconnects == 1);
+  AUD_CHECK(countersOf(stream).recoveries == 1);
+  aud_io_session_destroy(session);
+}
+
+// A loss of a device the worker replaced on its own - its start failed
+// once the system gave the audio back, after the backoff of an
+// interruption's end - arrives late: the device that replaced it runs on,
+// no disconnect is reported. The new device's own loss still recovers.
+AUD_TEST(a_late_loss_of_a_replaced_device_keeps_the_new_one) {
+  AudIoSession* session = makeSession(0);
+  Inbox inbox(session);
+  AudIoStream* stream =
+      open(session, makeConfig(aud_io_sine_render, nullptr));
+  AUD_CHECK(aud_io_stream_start(stream) == AUD_OK);
+  AUD_CHECK(aud_io_null_inject(session, AUD_IO_FAULT_INTERRUPT, 1) == AUD_OK);
+  AUD_CHECK(inbox.waitFor(AUD_IO_NOTIFY_INTERRUPTED));
+  // The client ends the interruption while the system still holds the
+  // audio: the worker retries the start of the device with backoff.
+  AUD_CHECK(aud_io_session_resume(session) == AUD_OK);
+  AUD_CHECK(waitState(stream, AUD_IO_STATE_RECOVERING));
+  // Meanwhile the device goes; once the audio is back, its start fails and
+  // the worker opens the next one before it takes the loss.
+  AUD_CHECK(aud_io_null_inject(session, AUD_IO_FAULT_DISCONNECT, 0) == AUD_OK);
+  AUD_CHECK(aud_io_null_inject(session, AUD_IO_FAULT_INTERRUPT, 0) == AUD_OK);
+  AUD_CHECK(inbox.waitFor(AUD_IO_NOTIFY_RESUMED));
+  AUD_CHECK(waitState(stream, AUD_IO_STATE_RUNNING));
+  sleepMs(20);
+  AUD_CHECK(inbox.count(AUD_IO_NOTIFY_DISCONNECTED) == 0);
+  AUD_CHECK(inbox.count(AUD_IO_NOTIFY_RECOVERED) == 1);
+  AUD_CHECK(countersOf(stream).disconnects == 0);
+  AUD_CHECK(aud_io_stream_state(stream) == AUD_IO_STATE_RUNNING);
+  AUD_CHECK(aud_io_null_inject(session, AUD_IO_FAULT_DISCONNECT, 0) == AUD_OK);
+  AUD_CHECK(inbox.waitFor(AUD_IO_NOTIFY_DISCONNECTED));
+  AUD_CHECK(inbox.waitCount(AUD_IO_NOTIFY_RECOVERED, 2));
+  AUD_CHECK(waitState(stream, AUD_IO_STATE_RUNNING));
+  AUD_CHECK(countersOf(stream).disconnects == 1);
+  aud_io_session_destroy(session);
+}
+
 AUD_TEST(a_fixed_rate_survives_a_rate_change) {
   AudIoSession* session = makeSession();
   Inbox inbox(session);

@@ -23,21 +23,21 @@ packages:
       path: "../../aud_audio_core"
       relative: true
     source: path
-    version: "0.5.2"
+    version: "0.5.3"
   aud_audio_graph:
     dependency: "direct overridden"
     description:
       path: "../../aud_audio_graph"
       relative: true
     source: path
-    version: "0.5.3"
+    version: "0.5.4"
   aud_audio_io:
     dependency: "direct main"
     description:
       path: ".."
       relative: true
     source: path
-    version: "0.3.3"
+    version: "0.3.4"
   aud_midi_standard:
     dependency: transitive
     description:

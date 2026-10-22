@@ -14,8 +14,9 @@ import 'package:native_toolchain_c/native_toolchain_c.dart';
 
 // Builds the stream, the null backend and the backend of the target
 // platform (ticket 21): Oboe compiled from the vendored sources on Android,
-// miniaudio with AVAudioSession on iOS, the null backend alone elsewhere
-// until the desktop backends arrive (S3b to S3d). The iOS backend is
+// miniaudio with AVAudioSession on iOS, miniaudio on the devices of the HAL
+// on macOS (ticket 37), the null backend alone on Windows and Linux until
+// their backends arrive (S3c, S3d). The Apple backends are
 // Objective-C++ (`.mm`); the sources therefore mix languages, no language
 // flag is passed - clang picks it by extension - and the C++ runtime is
 // linked explicitly (build-001). The symbols of the vendored libraries stay
@@ -30,7 +31,8 @@ void main(List<String> args) async {
     final targetOS = input.config.code.targetOS;
     final android = targetOS == OS.android;
     final iOS = targetOS == OS.iOS;
-    final apple = iOS || targetOS == OS.macOS;
+    final macOS = targetOS == OS.macOS;
+    final apple = iOS || macOS;
     final cbuilder = CBuilder.library(
       name: packageName,
       assetName: 'src/${packageName}_bindings_generated.dart',
@@ -39,6 +41,7 @@ void main(List<String> args) async {
         'src/aud_io_render.cpp',
         'src/aud_io_stream.cpp',
         if (iOS) 'src/aud_io_ios.mm',
+        if (macOS) 'src/aud_io_macos.mm',
         if (android) ...[
           'src/aud_io_android.cpp',
           ...await oboeSources(input.packageRoot),
@@ -57,7 +60,8 @@ void main(List<String> args) async {
       flags: [
         '-fvisibility=hidden',
         '-fvisibility-inlines-hidden',
-        if (iOS) '-fobjc-arc',
+        if (apple) '-fobjc-arc',
+        if (macOS) '-DAUD_IO_MACOS_DEVICE=1',
         if (android) ...[
           '-Wl,-z,max-page-size=16384',
           // The static C++ runtime stays inside the library.
@@ -81,6 +85,14 @@ void main(List<String> args) async {
           'CoreFoundation',
           'Foundation',
           'UIKit',
+        ],
+        if (macOS) ...[
+          'AVFoundation',
+          'AudioToolbox',
+          'AudioUnit',
+          'CoreAudio',
+          'CoreFoundation',
+          'Foundation',
         ],
       ],
     );

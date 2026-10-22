@@ -12,10 +12,13 @@
 #ifndef AUD_IO_INTERNAL_HPP
 #define AUD_IO_INTERNAL_HPP
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "aud_audio_io.h"
@@ -83,6 +86,8 @@ struct DeviceRequest {
 // callback runs afterwards.
 class Device {
  public:
+  Device() : serial_(nextSerial()) {}
+
   virtual ~Device() = default;
 
   // [control] Starts the callbacks.
@@ -96,6 +101,19 @@ class Device {
 
   // [control] The underruns and overruns the backend counted.
   virtual uint64_t xruns() const { return 0; }
+
+  // [any thread] The number of the device, higher with every device opened
+  // in the process. A loss report names its device by it, so that the
+  // stream drops the report of a device it closed or replaced already.
+  uint64_t serial() const { return serial_; }
+
+ private:
+  static uint64_t nextSerial() {
+    static std::atomic<uint64_t> next{1};
+    return next.fetch_add(1, std::memory_order_relaxed);
+  }
+
+  const uint64_t serial_;
 };
 
 // The devices of a platform. One backend per session.
@@ -160,11 +178,17 @@ std::unique_ptr<Backend> createPlatformBackend(
 void streamProcess(AudIoStream* stream, const float* input, float* output,
                    uint32_t frames, const DeviceTime& time) AUD_NONBLOCKING;
 
-// [any thread but the realtime thread] The device of `stream` went away or
-// changed; the worker of the stream recovers. Takes only the worker's lock,
+// [any thread but the realtime thread] The device `device` of `stream` went
+// away or changed; the worker of the stream recovers, unless the stream no
+// longer runs on that device: one loss may be reported more than once - on
+// macOS the device list, the default device and the device's presence each
+// tell of an unplug, on iOS one route change follows another, on Android
+// both streams of a duplex device -, and a later report would close the
+// device the stream had reopened meanwhile. Takes only the worker's lock,
 // so a backend may call it under its own lock - the lock that keeps the
 // stream alive while its device is registered.
-void streamDeviceLost(AudIoStream* stream, uint32_t reason);
+void streamDeviceLost(AudIoStream* stream, const Device& device,
+                      uint32_t reason);
 
 // [any thread but the realtime thread] The route of `stream` changed while
 // the device stayed; the worker reports it. Takes only the worker's lock.
@@ -251,12 +275,234 @@ void sessionDevicesChanged(AudIoSession* session);
 // answered.
 void sessionPermissionChanged(AudIoSession* session, int32_t permission);
 
-// [any thread but the realtime thread] Reports every stream of the session
-// as lost, e.g. after the media services of iOS were reset.
-void sessionAllDevicesLost(AudIoSession* session, uint32_t reason);
-
 // Copies `value` into the fixed string `out` of `capacity` bytes.
 void copyString(char* out, size_t capacity, const std::string& value);
+
+// ............................................................................
+// The decisions of the macOS backend
+//
+// What aud_io_macos.mm decides about the devices of the HAL, kept apart
+// from the HAL, so that the native tests reach it on every platform. A
+// device is its AudioObjectID, 0 for none; the codes are the HAL's
+// four-character codes, which aud_io_macos.mm checks against CoreAudio.
+
+namespace hal {
+
+// The four-character code `code` of the HAL, e.g. fourCc("usb ").
+constexpr uint32_t fourCc(const char (&code)[5]) {
+  return uint32_t(uint8_t(code[0])) << 24 | uint32_t(uint8_t(code[1])) << 16 |
+         uint32_t(uint8_t(code[2])) << 8 | uint32_t(uint8_t(code[3]));
+}
+
+// The transport types of a device (kAudioDeviceTransportType*).
+constexpr uint32_t kTransportBuiltIn = fourCc("bltn");
+constexpr uint32_t kTransportUsb = fourCc("usb ");
+constexpr uint32_t kTransportBluetooth = fourCc("blue");
+constexpr uint32_t kTransportBluetoothLe = fourCc("blea");
+constexpr uint32_t kTransportHdmi = fourCc("hdmi");
+constexpr uint32_t kTransportDisplayPort = fourCc("dprt");
+constexpr uint32_t kTransportAirPlay = fourCc("airp");
+constexpr uint32_t kTransportVirtual = fourCc("virt");
+constexpr uint32_t kTransportAggregate = fourCc("grup");
+constexpr uint32_t kTransportFireWire = fourCc("1394");
+constexpr uint32_t kTransportPci = fourCc("pci ");
+constexpr uint32_t kTransportThunderbolt = fourCc("thun");
+constexpr uint32_t kTransportAvb = fourCc("eavb");
+
+// The data source of a built-in output with headphones in the jack.
+constexpr uint32_t kSourceHeadphones = fourCc("hdpn");
+
+// The properties of a device whose change may reopen a stream.
+constexpr uint32_t kNominalSampleRate = fourCc("nsrt");
+constexpr uint32_t kStreamConfiguration = fourCc("slay");
+
+// The rates a device offers from its ranges of nominal rates, each as its
+// minimum and maximum: the ends of the ranges, each once and sorted, the
+// first AUD_IO_MAX_SAMPLE_RATES of them.
+inline std::vector<double> ratesOf(
+    const std::vector<std::pair<double, double>>& ranges) {
+  std::vector<double> rates;
+  for (const auto& range : ranges) {
+    for (const double rate : {range.first, range.second}) {
+      if (std::find(rates.begin(), rates.end(), rate) == rates.end() &&
+          rates.size() < AUD_IO_MAX_SAMPLE_RATES) {
+        rates.push_back(rate);
+      }
+    }
+  }
+  std::sort(rates.begin(), rates.end());
+  return rates;
+}
+
+// The route of a device in one direction, an AUD_IO_ROUTE_*, by its
+// transport type; `source` is the data source of a built-in output, which
+// tells headphones in the jack from the speaker.
+inline uint32_t routeOf(uint32_t transport, bool output, uint32_t source) {
+  switch (transport) {
+    case kTransportBuiltIn:
+      if (!output) return AUD_IO_ROUTE_BUILTIN_MIC;
+      return source == kSourceHeadphones ? AUD_IO_ROUTE_WIRED_HEADPHONES
+                                         : AUD_IO_ROUTE_SPEAKER;
+    case kTransportUsb:
+      return AUD_IO_ROUTE_USB;
+    case kTransportBluetooth:
+      return output ? AUD_IO_ROUTE_BLUETOOTH_A2DP : AUD_IO_ROUTE_BLUETOOTH_HFP;
+    case kTransportBluetoothLe:
+      return AUD_IO_ROUTE_BLUETOOTH_LE;
+    case kTransportHdmi:
+    case kTransportDisplayPort:
+      return AUD_IO_ROUTE_HDMI;
+    case kTransportAirPlay:
+      return AUD_IO_ROUTE_AIRPLAY;
+    case kTransportVirtual:
+    case kTransportAggregate:
+      return AUD_IO_ROUTE_VIRTUAL;
+    case kTransportFireWire:
+    case kTransportPci:
+    case kTransportThunderbolt:
+    case kTransportAvb:
+      return AUD_IO_ROUTE_LINE;
+    default:
+      return AUD_IO_ROUTE_UNKNOWN;
+  }
+}
+
+// Whether a stream on the devices `output` and `input`, 0 for a direction
+// it lacks, lost one of them: it is missing from the devices `present`.
+inline bool missingFrom(const std::vector<uint32_t>& present, uint32_t output,
+                        uint32_t input) {
+  for (const uint32_t device : {output, input}) {
+    if (device != 0 &&
+        std::find(present.begin(), present.end(), device) == present.end()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Whether a stream reopens on `now`, the new default device of the output
+// (`output`) or the input, 0 while there is none: the stream has the
+// direction, named no device for it and runs on `current`, another one.
+inline bool movesToDefault(bool output, const DeviceRequest& request,
+                           const DeviceFormat& format, uint32_t current,
+                           uint32_t now) {
+  const bool follows =
+      output ? format.outputChannels > 0 && request.outputId.empty()
+             : format.inputChannels > 0 && request.inputId.empty();
+  return follows && now != 0 && now != current;
+}
+
+// What the backend reads of a device after one of its properties changed.
+struct DeviceProperties {
+  bool alive = true;
+  double rate = 0;       // the nominal rate; 0: unknown
+  uint32_t outputs = 0;  // the channels per direction
+  uint32_t inputs = 0;
+};
+
+// How a stream uses a device: for its output, its input or both, opened
+// while the device ran at the nominal rate `rate`.
+struct DeviceUse {
+  bool output = false;
+  bool input = false;
+  double rate = 0;
+};
+
+// Whether a stream reopens for the nominal rate `now` of a device it opened
+// at `opened`, 0 for unknown: only a stream that asked for no rate runs at
+// the device's, miniaudio converts for the others. Each device counts with
+// its own rate, so that the input of a duplex stream is not weighed by the
+// rate of its output.
+inline bool reopensForRate(const DeviceRequest& request, double opened,
+                           double now) {
+  return request.sampleRate == 0 && now > 0 && std::fabs(now - opened) > 0.5;
+}
+
+// Why a stream reopens after `property` of a device it uses changed, an
+// AUD_IO_REASON_*, AUD_IO_REASON_NONE while it keeps running: the device
+// went away or lost a direction of the stream, its rate changed as
+// reopensForRate weighs it, or the channels of a stream that follows the
+// hardware changed, as on iOS.
+inline uint32_t lossOf(uint32_t property, const DeviceProperties& now,
+                       const DeviceUse& use, const DeviceRequest& request,
+                       const DeviceFormat& format) {
+  if (!now.alive) return AUD_IO_REASON_DEVICE_REMOVED;
+  if (property == kNominalSampleRate) {
+    return reopensForRate(request, use.rate, now.rate)
+               ? AUD_IO_REASON_SAMPLE_RATE
+               : AUD_IO_REASON_NONE;
+  }
+  if (property != kStreamConfiguration) return AUD_IO_REASON_NONE;
+  const bool gone =
+      (use.output && now.outputs == 0) || (use.input && now.inputs == 0);
+  const bool outputs =
+      use.output && request.outputChannels == 0 &&
+      std::min(now.outputs, kDefaultChannels) != format.outputChannels;
+  const bool inputs =
+      use.input && request.inputChannels == 0 &&
+      std::min(now.inputs, kDefaultChannels) != format.inputChannels;
+  return gone || outputs || inputs ? AUD_IO_REASON_DEVICE_REMOVED
+                                   : AUD_IO_REASON_NONE;
+}
+
+}  // namespace hal
+
+// ............................................................................
+// The decisions of the iOS backend
+//
+// What aud_io_ios.mm decides about the routes of the AVAudioSession, kept
+// apart from the session, so that the native tests reach it on every
+// platform. The reasons of a route change are the session's
+// AVAudioSessionRouteChangeReason values, which aud_io_ios.mm checks
+// against AVFoundation.
+
+namespace ios {
+
+// The reasons of a route change that tell of a device.
+constexpr uint64_t kNewDeviceAvailable = 1;
+constexpr uint64_t kOldDeviceUnavailable = 2;
+
+// Why the route changed, an AUD_IO_REASON_*, by the session's reason
+// `change`.
+inline uint32_t reasonOf(uint64_t change) {
+  if (change == kOldDeviceUnavailable) return AUD_IO_REASON_DEVICE_REMOVED;
+  if (change == kNewDeviceAvailable) return AUD_IO_REASON_DEVICE_ADDED;
+  return AUD_IO_REASON_ROUTE_OVERRIDE;
+}
+
+// What the session tells of the route after it changed.
+struct Route {
+  double rate = 0;       // the hardware's rate; 0: unknown
+  uint32_t outputs = 0;  // the channels per direction
+  uint32_t inputs = 0;
+  std::string output;  // the UID of the first port per direction
+  std::string input;
+};
+
+// Why a device reopens after the route changed for `why`, an
+// AUD_IO_REASON_*, AUD_IO_REASON_NONE while it keeps running: a stream
+// that follows the hardware reopens for a new rate, as on macOS, or a new
+// channel count, one with input on the new input; iOS moves the output
+// itself, so the output reopens only once the old one is gone.
+inline uint32_t lossOf(uint32_t why, const Route& now,
+                       const DeviceRequest& request,
+                       const DeviceFormat& format) {
+  const bool output = format.outputChannels > 0;
+  const bool input = format.inputChannels > 0;
+  const bool rate = hal::reopensForRate(request, format.sampleRate, now.rate);
+  const bool outputs =
+      output && request.outputChannels == 0 &&
+      std::min(now.outputs, kDefaultChannels) != format.outputChannels;
+  const bool inputs =
+      input && request.inputChannels == 0 &&
+      std::min(now.inputs, kDefaultChannels) != format.inputChannels;
+  const bool moved = (input && format.inputId != now.input) ||
+                     (output && format.outputId != now.output &&
+                      why == AUD_IO_REASON_DEVICE_REMOVED);
+  return rate || outputs || inputs || moved ? why : AUD_IO_REASON_NONE;
+}
+
+}  // namespace ios
 
 }  // namespace aud_io
 

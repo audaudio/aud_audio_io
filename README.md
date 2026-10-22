@@ -11,8 +11,9 @@ Part of the Audanika Audio Engine; planned in [aud_audio_pm](https://github.com/
 ## Goals
 
 - One stream for output, input and full duplex on iOS and Android
-  (ticket 21, step S3); macOS, Windows and Linux follow with S3b to S3d
-  and run the null device until then
+  (ticket 21, step S3) and on macOS (ticket 37, the macOS part of S3b);
+  Windows and Linux follow with S3c and S3d and run the null device until
+  then
 - Blocks of at most `maxFrames` frames, each with its `AudStreamTime`:
   sample position, host time with source and accuracy, latency per
   direction (decision time-001)

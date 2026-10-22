@@ -34,11 +34,11 @@
 //   was away, at least one, so that the time filters of the engine see the
 //   discontinuity and reset.
 //
-// Backends: Oboe on Android, miniaudio with AVAudioSession on iOS, and the
-// null backend on every platform - a device that keeps time, with faults
-// that tests inject. macOS, Windows and Linux get their devices with the
-// desktop backends (S3b to S3d); until then their platform backend is the
-// null backend.
+// Backends: Oboe on Android, miniaudio with AVAudioSession on iOS,
+// miniaudio on the devices of the HAL on macOS, and the null backend on
+// every platform - a device that keeps time, with faults that tests inject.
+// Windows and Linux get their devices with the desktop backends (S3c, S3d);
+// until then their platform backend is the null backend.
 //
 // Threads: [control] functions are called from one thread, the control
 // thread; [realtime] from the audio thread.
@@ -79,7 +79,8 @@ enum {
 // Backends of a session.
 enum {
   // The platform's backend: Oboe on Android, miniaudio with AVAudioSession
-  // on iOS, the null backend elsewhere until S3b to S3d.
+  // on iOS, miniaudio on the HAL on macOS, the null backend elsewhere until
+  // S3c and S3d.
   AUD_IO_BACKEND_PLATFORM = 0,
   // A device that keeps time and takes injected faults, for tests.
   AUD_IO_BACKEND_NULL = 1,
