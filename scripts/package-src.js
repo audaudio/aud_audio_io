@@ -12,6 +12,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { fileURLToPath, pathToFileURL } = require('node:url');
 
 // The `src` directory of the package `name`, seen from the repo `root`.
 function packageSrc(root, name) {
@@ -22,8 +23,8 @@ function packageSrc(root, name) {
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   const entry = config.packages.find((p) => p.name === name);
   if (!entry) throw new Error(`Package ${name} is not in the package config`);
-  const rootUri = new URL(entry.rootUri, `file://${configPath}`);
-  return path.join(decodeURIComponent(rootUri.pathname), 'src');
+  const rootUri = new URL(entry.rootUri, pathToFileURL(configPath));
+  return path.join(fileURLToPath(rootUri), 'src');
 }
 
 module.exports = { packageSrc };

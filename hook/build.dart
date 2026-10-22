@@ -75,7 +75,7 @@ void main(List<String> args) async {
       libraries: [
         if (android) ...['c++_static', 'c++abi', 'log', 'OpenSLES', 'm'],
         if (apple) 'c++',
-        if (!android && !apple) 'stdc++',
+        if (targetOS == OS.linux) 'stdc++',
       ],
       frameworks: [
         if (iOS) ...[
