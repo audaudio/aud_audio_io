@@ -17,7 +17,10 @@
 // times are estimates as on iOS: the callback time plus the block of the
 // callback and the device's latency, safety offset and stream latency,
 // read on the control thread and handed to the audio thread through
-// atomics (time-001). Objective-C++ with ARC.
+// atomics (time-001). What the backend decides about the devices - their
+// rates and routes, and when a stream reopens - lives in hal:: of
+// aud_io_internal.hpp, where the native tests reach it. Objective-C++ with
+// ARC.
 
 #include <TargetConditionals.h>
 
@@ -46,6 +49,8 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "aud_clock.h"
@@ -58,6 +63,30 @@ constexpr double kFallbackRate = 48000;
 // The low-latency default of the IO buffer: 256 frames at 48 kHz, 5.3 ms.
 constexpr double kDefaultBufferSeconds = 256.0 / 48000.0;
 constexpr const char* kBackendName = "miniaudio/Core Audio";
+
+// hal:: names the devices and the codes of the HAL by plain integers.
+static_assert(std::is_same<AudioObjectID, uint32_t>::value);
+static_assert(kAudioObjectUnknown == 0);
+static_assert(hal::kTransportBuiltIn == kAudioDeviceTransportTypeBuiltIn);
+static_assert(hal::kTransportUsb == kAudioDeviceTransportTypeUSB);
+static_assert(hal::kTransportBluetooth == kAudioDeviceTransportTypeBluetooth);
+static_assert(hal::kTransportBluetoothLe ==
+              kAudioDeviceTransportTypeBluetoothLE);
+static_assert(hal::kTransportHdmi == kAudioDeviceTransportTypeHDMI);
+static_assert(hal::kTransportDisplayPort ==
+              kAudioDeviceTransportTypeDisplayPort);
+static_assert(hal::kTransportAirPlay == kAudioDeviceTransportTypeAirPlay);
+static_assert(hal::kTransportVirtual == kAudioDeviceTransportTypeVirtual);
+static_assert(hal::kTransportAggregate == kAudioDeviceTransportTypeAggregate);
+static_assert(hal::kTransportFireWire == kAudioDeviceTransportTypeFireWire);
+static_assert(hal::kTransportPci == kAudioDeviceTransportTypePCI);
+static_assert(hal::kTransportThunderbolt ==
+              kAudioDeviceTransportTypeThunderbolt);
+static_assert(hal::kTransportAvb == kAudioDeviceTransportTypeAVB);
+static_assert(hal::kNominalSampleRate ==
+              kAudioDevicePropertyNominalSampleRate);
+static_assert(hal::kStreamConfiguration ==
+              kAudioDevicePropertyStreamConfiguration);
 
 // .............................................................................
 // The HAL
@@ -162,8 +191,7 @@ double nominalRateOf(AudioObjectID device) {
   return rate;
 }
 
-// The rates the device offers: the ends of its ranges, at most
-// AUD_IO_MAX_SAMPLE_RATES.
+// The rates the device offers, as hal::ratesOf picks them from its ranges.
 std::vector<double> ratesOf(AudioObjectID device) {
   const AudioObjectPropertyAddress address =
       addressOf(kAudioDevicePropertyAvailableNominalSampleRates);
@@ -177,17 +205,12 @@ std::vector<double> ratesOf(AudioObjectID device) {
                                  ranges.data()) != noErr) {
     return {};
   }
-  std::vector<double> rates;
+  ranges.resize(size / sizeof(AudioValueRange));
+  std::vector<std::pair<double, double>> ends;
   for (const AudioValueRange& range : ranges) {
-    for (double rate : {range.mMinimum, range.mMaximum}) {
-      if (std::find(rates.begin(), rates.end(), rate) == rates.end() &&
-          rates.size() < AUD_IO_MAX_SAMPLE_RATES) {
-        rates.push_back(rate);
-      }
-    }
+    ends.emplace_back(range.mMinimum, range.mMaximum);
   }
-  std::sort(rates.begin(), rates.end());
-  return rates;
+  return hal::ratesOf(ends);
 }
 
 // The frames between the callback and the hardware in one direction: the
@@ -226,37 +249,13 @@ uint32_t routeOf(AudioObjectID device, bool output) {
   UInt32 transport = 0;
   readProperty(device, kAudioDevicePropertyTransportType,
                kAudioObjectPropertyScopeGlobal, &transport);
-  switch (transport) {
-    case kAudioDeviceTransportTypeBuiltIn: {
-      if (!output) return AUD_IO_ROUTE_BUILTIN_MIC;
-      UInt32 source = 0;
-      readProperty(device, kAudioDevicePropertyDataSource,
-                   kAudioObjectPropertyScopeOutput, &source);
-      return source == 'hdpn' ? AUD_IO_ROUTE_WIRED_HEADPHONES
-                              : AUD_IO_ROUTE_SPEAKER;
-    }
-    case kAudioDeviceTransportTypeUSB:
-      return AUD_IO_ROUTE_USB;
-    case kAudioDeviceTransportTypeBluetooth:
-      return output ? AUD_IO_ROUTE_BLUETOOTH_A2DP : AUD_IO_ROUTE_BLUETOOTH_HFP;
-    case kAudioDeviceTransportTypeBluetoothLE:
-      return AUD_IO_ROUTE_BLUETOOTH_LE;
-    case kAudioDeviceTransportTypeHDMI:
-    case kAudioDeviceTransportTypeDisplayPort:
-      return AUD_IO_ROUTE_HDMI;
-    case kAudioDeviceTransportTypeAirPlay:
-      return AUD_IO_ROUTE_AIRPLAY;
-    case kAudioDeviceTransportTypeVirtual:
-    case kAudioDeviceTransportTypeAggregate:
-      return AUD_IO_ROUTE_VIRTUAL;
-    case kAudioDeviceTransportTypeFireWire:
-    case kAudioDeviceTransportTypePCI:
-    case kAudioDeviceTransportTypeThunderbolt:
-    case kAudioDeviceTransportTypeAVB:
-      return AUD_IO_ROUTE_LINE;
-    default:
-      return AUD_IO_ROUTE_UNKNOWN;
+  // Only a built-in output tells headphones in the jack by its data source.
+  UInt32 source = 0;
+  if (transport == kAudioDeviceTransportTypeBuiltIn && output) {
+    readProperty(device, kAudioDevicePropertyDataSource,
+                 kAudioObjectPropertyScopeOutput, &source);
   }
+  return hal::routeOf(transport, output, source);
 }
 
 bool isHidden(AudioObjectID device) {
@@ -313,6 +312,22 @@ class MacDevice : public Device {
   const DeviceRequest& request() const { return request_; }
   AudioObjectID output() const { return output_; }
   AudioObjectID input() const { return input_; }
+
+  // How the device uses the HAL's device `id`; neither direction when it
+  // does not.
+  hal::DeviceUse useOf(AudioObjectID id) const {
+    hal::DeviceUse use;
+    use.output = id == output_;
+    use.input = id == input_;
+    use.rate = use.output ? outputRate_ : inputRate_;
+    return use;
+  }
+
+  // [under the backend's mutex_] Reports the loss `reason` to the stream,
+  // only the first one (hal::LossReport).
+  void lost(uint32_t reason) {
+    if (loss_.take(reason)) streamDeviceLost(stream_, reason);
+  }
 
   // [control] Reads the latencies of the devices for the audio thread.
   void readLatencies() {
@@ -377,6 +392,10 @@ class MacDevice : public Device {
   bool initialized_ = false;
   AudioObjectID output_ = kAudioObjectUnknown;
   AudioObjectID input_ = kAudioObjectUnknown;
+  // The nominal rates of the devices when they opened.
+  double outputRate_ = 0;
+  double inputRate_ = 0;
+  hal::LossReport loss_;  // under the backend's mutex_
   std::atomic<int64_t> outputNs_{0};
   std::atomic<int64_t> inputNs_{0};
   std::atomic<uint64_t> xruns_{0};
@@ -650,25 +669,16 @@ class MacBackend : public Backend {
       std::lock_guard<std::mutex> lock(mutex_);
       for (MacDevice* device : devices_) {
         if (list) {
-          for (AudioObjectID id : {device->output(), device->input()}) {
-            if (id != kAudioObjectUnknown &&
-                std::find(present.begin(), present.end(), id) ==
-                    present.end()) {
-              streamDeviceLost(device->stream(), AUD_IO_REASON_DEVICE_REMOVED);
-              break;
-            }
+          if (hal::missingFrom(present, device->output(), device->input())) {
+            device->lost(AUD_IO_REASON_DEVICE_REMOVED);
           }
           continue;
         }
         // A stream without an id follows the default device.
-        const bool follows = output ? device->format().outputChannels > 0 &&
-                                          device->request().outputId.empty()
-                                    : device->format().inputChannels > 0 &&
-                                          device->request().inputId.empty();
-        const AudioObjectID current =
-            output ? device->output() : device->input();
-        if (follows && now != kAudioObjectUnknown && now != current) {
-          streamDeviceLost(device->stream(), AUD_IO_REASON_ROUTE_OVERRIDE);
+        if (hal::movesToDefault(output, device->request(), device->format(),
+                                output ? device->output() : device->input(),
+                                now)) {
+          device->lost(AUD_IO_REASON_ROUTE_OVERRIDE);
         }
       }
     }
@@ -677,49 +687,28 @@ class MacBackend : public Backend {
 
   // [HAL queue] A property of a device a stream uses changed.
   void deviceChanged(AudioObjectID id, AudioObjectPropertySelector selector) {
-    const bool alive = [&] {
-      UInt32 value = 1;
-      readProperty(id, kAudioDevicePropertyDeviceIsAlive,
-                   kAudioObjectPropertyScopeGlobal, &value);
-      return value != 0;
-    }();
-    const double rate = nominalRateOf(id);
-    const uint32_t outputs = channelsOf(id, true);
-    const uint32_t inputs = channelsOf(id, false);
+    hal::DeviceProperties now;
+    UInt32 alive = 1;
+    readProperty(id, kAudioDevicePropertyDeviceIsAlive,
+                 kAudioObjectPropertyScopeGlobal, &alive);
+    now.alive = alive != 0;
+    now.rate = nominalRateOf(id);
+    now.outputs = channelsOf(id, true);
+    now.inputs = channelsOf(id, false);
     {
       std::lock_guard<std::mutex> lock(mutex_);
       for (MacDevice* device : devices_) {
-        const bool isOutput = device->output() == id;
-        const bool isInput = device->input() == id;
-        if (!isOutput && !isInput) continue;
+        const hal::DeviceUse use = device->useOf(id);
+        if (!use.output && !use.input) continue;
         if (selector == kAudioDeviceProcessorOverload) {
           device->overloaded();
           continue;
         }
         device->readLatencies();
-        const DeviceFormat& format = device->format();
-        const DeviceRequest& request = device->request();
-        uint32_t lost = AUD_IO_REASON_NONE;
-        if (!alive) {
-          lost = AUD_IO_REASON_DEVICE_REMOVED;
-        } else if (selector == kAudioDevicePropertyNominalSampleRate &&
-                   rate > 0 && std::fabs(rate - format.sampleRate) > 0.5) {
-          // The device runs at another rate: miniaudio would convert
-          // behind the stream's back.
-          lost = AUD_IO_REASON_SAMPLE_RATE;
-        } else if (selector == kAudioDevicePropertyStreamConfiguration) {
-          // A device that follows the hardware reopens for a new channel
-          // count, as on iOS.
-          if ((isOutput && request.outputChannels == 0 &&
-               std::min(outputs, kDefaultChannels) != format.outputChannels) ||
-              (isInput && request.inputChannels == 0 &&
-               std::min(inputs, kDefaultChannels) != format.inputChannels) ||
-              (isOutput && outputs == 0) || (isInput && inputs == 0)) {
-            lost = AUD_IO_REASON_DEVICE_REMOVED;
-          }
-        }
+        const uint32_t lost = hal::lossOf(selector, now, use, device->request(),
+                                          device->format());
         if (lost != AUD_IO_REASON_NONE) {
-          streamDeviceLost(device->stream(), lost);
+          device->lost(lost);
         } else if (selector == kAudioDevicePropertyDataSource) {
           // Headphones in the built-in jack: the device stays, the route
           // changes.
@@ -784,8 +773,11 @@ int32_t MacDevice::open(ma_context* context, AudioObjectID output,
           ? request_.inputChannels
           : std::max(1u, std::min(channelsOf(input, false), kDefaultChannels));
   // The device's own rate unless the stream asks for one; miniaudio
-  // converts then, it never changes the device's rate.
-  const double hardware = nominalRateOf(hasOutput ? output : input);
+  // converts then, it never changes the device's rate. The rates of both
+  // devices tell later whether their own rate changed (hal::lossOf).
+  outputRate_ = hasOutput ? nominalRateOf(output) : 0;
+  inputRate_ = hasInput ? nominalRateOf(input) : 0;
+  const double hardware = hasOutput ? outputRate_ : inputRate_;
   const double rate = request_.sampleRate > 0 ? request_.sampleRate
                       : hardware > 0          ? hardware
                                               : kFallbackRate;

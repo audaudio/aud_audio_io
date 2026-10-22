@@ -23,8 +23,16 @@
 - Add the macOS device to the index
 
 - Add the microphone permission before macOS 14
+
 - Before macOS 14 the permission comes from AVCaptureDevice instead of always being granted
+
 - A device whose open failed no longer removes the listeners of another stream on the same device
+
+- Add tests for the macOS backend's loss and rate decisions
+- One unplug reaches the stream once: a device reports only its first loss, a later report of the device list, the default or IsAlive closed the device the stream had just reopened
+- A rate change reopens only a stream that asked for no rate, weighed by each device's own rate at open instead of the stream's, so a duplex input no longer counts against its output
+- The decisions on the HAL's devices live in hal:: of aud_io_internal.hpp: rates, routes, lost devices, the default device, the loss of a changed property and the single loss report
+- test/native/aud_io_macos_test.cpp covers them in the native tests
 
 ## 0.3.4 - 2026-10-15
 
