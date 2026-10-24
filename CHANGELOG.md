@@ -1,19 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-10-24
 
 ### Added
 
 - Add the Windows device on WASAPI (ticket 38)
-
-src/aud_io_windows.cpp: miniaudio WASAPI shared mode on the endpoints of IMMDeviceEnumerator
-Endpoints opened by id; a stream without an id follows the default by reopening
-IAudioClient3 periods at the mix rate, the period rounded up to the engine fundamental
-An IMMNotificationClient and a COM thread report removal, defaults, mix format and stopped devices
-Host times from the queued frames and the stream latency; an empty queue counts as an xrun
-The microphone permission follows the privacy settings of Windows
-The hook builds it for Windows with ole32 and advapi32; the native tests test wasapi::
-The example duplex test skips without an input endpoint
 
 ### Changed
 
@@ -73,7 +64,6 @@ The example duplex test skips without an input endpoint
 
 - Native tests: two losses of one device disconnect once, a late loss of a replaced device keeps the new one, the new device's own loss still recovers
 
-
 ## 0.3.4 - 2026-10-15
 
 ### Added
@@ -104,7 +94,6 @@ The example duplex test skips without an input endpoint
 
 - The placements are documented as the code sets them; the README names AudIoPlacement
 
-
 ## 0.3.3 - 2026-10-14
 
 ### Added
@@ -125,7 +114,6 @@ The example duplex test skips without an input endpoint
 - Add review fixes of ticket 26
 
 - Remove the blank lines between the entries under Unreleased in CHANGELOG.md
-
 
 ## 0.3.1 - 2026-10-12
 
