@@ -504,6 +504,158 @@ inline uint32_t lossOf(uint32_t why, const Route& now,
 
 }  // namespace ios
 
+// ............................................................................
+// The decisions of the Windows backend
+//
+// What aud_io_windows.cpp decides about the endpoints of WASAPI - their
+// routes, when a stream reopens and the microphone permission -, kept apart
+// from COM, so that the native tests reach it on every platform. The form
+// factors are the values of EndpointFormFactor, which aud_io_windows.cpp
+// checks against mmdeviceapi.h. An endpoint has one direction.
+
+namespace wasapi {
+
+// The form factors of an endpoint (PKEY_AudioEndpoint_FormFactor).
+constexpr uint32_t kRemoteNetworkDevice = 0;
+constexpr uint32_t kSpeakers = 1;
+constexpr uint32_t kLineLevel = 2;
+constexpr uint32_t kHeadphones = 3;
+constexpr uint32_t kMicrophone = 4;
+constexpr uint32_t kHeadset = 5;
+constexpr uint32_t kHandset = 6;
+constexpr uint32_t kUnknownDigitalPassthrough = 7;
+constexpr uint32_t kSpdif = 8;
+constexpr uint32_t kDigitalAudioDisplayDevice = 9;
+constexpr uint32_t kUnknownFormFactor = 10;
+
+// The bus an endpoint's device hangs on.
+enum class Bus { other, usb, bluetooth, bluetoothLe };
+
+// The bus by the enumerator of the endpoint's device
+// (PKEY_Device_EnumeratorName): "USB", the Bluetooth enumerators - "BTHENUM"
+// for A2DP, "BTHHFENUM" for hands-free, "BTHLEDEVICE" for LE Audio -, and
+// the others, e.g. "HDAUDIO", in any case.
+inline Bus busOf(const std::string& enumerator) {
+  std::string name = enumerator;
+  for (char& c : name) {
+    if (c >= 'a' && c <= 'z') c = char(c - 'a' + 'A');
+  }
+  if (name == "USB") return Bus::usb;
+  if (name.rfind("BTHLE", 0) == 0) return Bus::bluetoothLe;
+  if (name.rfind("BTH", 0) == 0) return Bus::bluetooth;
+  return Bus::other;
+}
+
+// The route of an endpoint, an AUD_IO_ROUTE_*, by its bus and its form
+// factor: USB and Bluetooth by the bus - a Bluetooth headset is hands-free,
+// as is its input -, the others by the form factor; remote audio, e.g. of a
+// Remote Desktop session, is virtual.
+inline uint32_t routeOf(uint32_t formFactor, Bus bus, bool output) {
+  switch (bus) {
+    case Bus::usb:
+      return AUD_IO_ROUTE_USB;
+    case Bus::bluetoothLe:
+      return AUD_IO_ROUTE_BLUETOOTH_LE;
+    case Bus::bluetooth:
+      return output && formFactor != kHeadset && formFactor != kHandset
+                 ? AUD_IO_ROUTE_BLUETOOTH_A2DP
+                 : AUD_IO_ROUTE_BLUETOOTH_HFP;
+    case Bus::other:
+      break;
+  }
+  switch (formFactor) {
+    case kSpeakers:
+      return AUD_IO_ROUTE_SPEAKER;
+    case kHeadphones:
+      return AUD_IO_ROUTE_WIRED_HEADPHONES;
+    case kHeadset:
+    case kHandset:
+      return AUD_IO_ROUTE_WIRED_HEADSET;
+    case kMicrophone:
+      return AUD_IO_ROUTE_BUILTIN_MIC;
+    case kLineLevel:
+    case kSpdif:
+    case kUnknownDigitalPassthrough:
+      return AUD_IO_ROUTE_LINE;
+    case kDigitalAudioDisplayDevice:
+      return AUD_IO_ROUTE_HDMI;
+    case kRemoteNetworkDevice:
+      return AUD_IO_ROUTE_VIRTUAL;
+    default:
+      return AUD_IO_ROUTE_UNKNOWN;
+  }
+}
+
+// Whether a stream reopens on `now`, the id of the new default endpoint of
+// the output (`output`) or the input, empty while there is none: the stream
+// has the direction, named no endpoint for it and runs on another one.
+inline bool movesToDefault(bool output, const DeviceRequest& request,
+                           const DeviceFormat& format, const std::string& now) {
+  const bool follows =
+      output ? format.outputChannels > 0 && request.outputId.empty()
+             : format.inputChannels > 0 && request.inputId.empty();
+  const std::string& current = output ? format.outputId : format.inputId;
+  return follows && !now.empty() && now != current;
+}
+
+// The period to ask miniaudio for when a stream wants `desired` frames of an
+// endpoint whose engine runs shared streams in multiples of `fundamental`
+// frames between `minimum` and `maximum` (IAudioClient3): rounded up to the
+// fundamental period, since miniaudio takes the low-latency path only for a
+// period no smaller than the one asked for. A stream that wants more than
+// the maximum keeps its period, and miniaudio the classic shared mode; so
+// does one where the engine tells nothing (`fundamental` 0).
+inline uint32_t periodOf(uint32_t desired, uint32_t fundamental,
+                         uint32_t minimum, uint32_t maximum) {
+  if (fundamental == 0) return desired;
+  const uint32_t rounded =
+      (desired + fundamental - 1) / fundamental * fundamental;
+  if (rounded > maximum) return desired;
+  return std::max(rounded, minimum);
+}
+
+// What the backend reads of an endpoint after one of its events.
+struct EndpointState {
+  bool active = true;     // DEVICE_STATE_ACTIVE
+  double rate = 0;        // of the mix format; 0: unknown
+  uint32_t channels = 0;  // of the mix format; 0: unknown
+};
+
+// Why a stream reopens after an event of the endpoint it uses for its
+// output (`output`) or its input, opened at the mix rate `opened`, an
+// AUD_IO_REASON_*, AUD_IO_REASON_NONE while it keeps running: the endpoint
+// is gone or disabled, its rate changed as hal::reopensForRate weighs it, or
+// the channels of a stream that follows the hardware changed, as on macOS.
+inline uint32_t lossOf(const EndpointState& now, bool output, double opened,
+                       const DeviceRequest& request,
+                       const DeviceFormat& format) {
+  if (!now.active) return AUD_IO_REASON_DEVICE_REMOVED;
+  if (hal::reopensForRate(request, opened, now.rate)) {
+    return AUD_IO_REASON_SAMPLE_RATE;
+  }
+  const uint32_t asked =
+      output ? request.outputChannels : request.inputChannels;
+  const uint32_t has = output ? format.outputChannels : format.inputChannels;
+  if (asked == 0 && now.channels > 0 &&
+      std::min(now.channels, kDefaultChannels) != has) {
+    return AUD_IO_REASON_DEVICE_REMOVED;
+  }
+  return AUD_IO_REASON_NONE;
+}
+
+// The microphone permission, an AUD_IO_PERMISSION_*, from the privacy
+// settings of Windows: the values of the consent store - for the device,
+// for all apps of the user and for desktop apps -, each "Allow", "Deny" or
+// empty where unset. Desktop apps get no prompt; one "Deny" denies.
+inline int32_t permissionOf(const std::vector<std::string>& consents) {
+  for (const std::string& consent : consents) {
+    if (consent == "Deny") return AUD_IO_PERMISSION_DENIED;
+  }
+  return AUD_IO_PERMISSION_GRANTED;
+}
+
+}  // namespace wasapi
+
 }  // namespace aud_io
 
 #endif  // AUD_IO_INTERNAL_HPP

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 - 2026-10-24
+
+### Added
+
+- Add the Windows device on WASAPI (ticket 38)
+
+### Changed
+
+- Build and test aud_audio_io on Windows
+
 ## 0.3.5 - 2026-10-22
 
 ### Added

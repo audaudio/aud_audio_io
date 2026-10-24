@@ -15,8 +15,9 @@ import 'package:native_toolchain_c/native_toolchain_c.dart';
 // Builds the stream, the null backend and the backend of the target
 // platform (ticket 21): Oboe compiled from the vendored sources on Android,
 // miniaudio with AVAudioSession on iOS, miniaudio on the devices of the HAL
-// on macOS (ticket 37), the null backend alone on Windows and Linux until
-// their backends arrive (S3c, S3d). The Apple backends are
+// on macOS (ticket 37), miniaudio on WASAPI on Windows (ticket 38), linked
+// with COM and the registry, the null backend alone on Linux until its
+// part of S3b arrives. The Apple backends are
 // Objective-C++ (`.mm`); the sources therefore mix languages, no language
 // flag is passed - clang picks it by extension - and the C++ runtime is
 // linked explicitly (build-001). The symbols of the vendored libraries stay
@@ -32,6 +33,7 @@ void main(List<String> args) async {
     final android = targetOS == OS.android;
     final iOS = targetOS == OS.iOS;
     final macOS = targetOS == OS.macOS;
+    final windows = targetOS == OS.windows;
     final apple = iOS || macOS;
     final cbuilder = CBuilder.library(
       name: packageName,
@@ -42,6 +44,7 @@ void main(List<String> args) async {
         'src/aud_io_stream.cpp',
         if (iOS) 'src/aud_io_ios.mm',
         if (macOS) 'src/aud_io_macos.mm',
+        if (windows) 'src/aud_io_windows.cpp',
         if (android) ...[
           'src/aud_io_android.cpp',
           ...await oboeSources(input.packageRoot),
@@ -62,6 +65,7 @@ void main(List<String> args) async {
         '-fvisibility-inlines-hidden',
         if (apple) '-fobjc-arc',
         if (macOS) '-DAUD_IO_MACOS_DEVICE=1',
+        if (windows) '-DAUD_IO_WINDOWS_DEVICE=1',
         if (android) ...[
           '-Wl,-z,max-page-size=16384',
           // The static C++ runtime stays inside the library.
@@ -75,7 +79,8 @@ void main(List<String> args) async {
       libraries: [
         if (android) ...['c++_static', 'c++abi', 'log', 'OpenSLES', 'm'],
         if (apple) 'c++',
-        if (!android && !apple) 'stdc++',
+        if (targetOS == OS.linux) 'stdc++',
+        if (windows) ...['ole32', 'advapi32'],
       ],
       frameworks: [
         if (iOS) ...[

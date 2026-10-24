@@ -607,14 +607,14 @@ AUD_TEST(render_errors_are_reported_once) {
 // The fast cores are those above the slowest clock (io-003): the big
 // cluster of two, the big and prime cores of three; none on one cluster.
 AUD_TEST(the_fast_cores_lie_above_the_slowest_clock) {
-  const long small = 1900800;
+  const long slow = 1900800;
   const long big = 2361600;
-  AUD_CHECK(aud_io::fastCoresOf({small, small, small, small, big, big, big,
+  AUD_CHECK(aud_io::fastCoresOf({slow, slow, slow, slow, big, big, big,
                                  big}) == 0xf0);
   AUD_CHECK(aud_io::fastCoresOf({1785600, 1785600, 1785600, 1785600, 2419200,
                                  2419200, 2419200, 2841600}) == 0xf0);
   // A core that tells no clock, e.g. offline, is no fast core.
-  AUD_CHECK(aud_io::fastCoresOf({small, small, 0, small, big, 0, big, big}) ==
+  AUD_CHECK(aud_io::fastCoresOf({slow, slow, 0, slow, big, 0, big, big}) ==
             0xd0);
   AUD_CHECK(aud_io::fastCoresOf({big, big, big, big}) == 0);
   AUD_CHECK(aud_io::fastCoresOf({0, 0}) == 0);
