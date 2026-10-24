@@ -23,14 +23,14 @@ packages:
       path: "../../aud_audio_core"
       relative: true
     source: path
-    version: "0.5.3"
+    version: "0.5.4"
   aud_audio_graph:
     dependency: "direct overridden"
     description:
       path: "../../aud_audio_graph"
       relative: true
     source: path
-    version: "0.5.4"
+    version: "0.5.5"
   aud_audio_io:
     dependency: "direct main"
     description:
@@ -42,10 +42,10 @@ packages:
     dependency: transitive
     description:
       name: aud_midi_standard
-      sha256: "6ce86e854c3e2f510b6e48de194e4a1b020f2c4568e5fa52e464771847b6043e"
+      sha256: c97a486531d36b9fa9765be8145d4367d7d501af113af8faf10b9154e6af09b9
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.0"
+    version: "0.1.1"
   boolean_selector:
     dependency: transitive
     description:
