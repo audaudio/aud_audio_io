@@ -4,16 +4,17 @@ Audio-Geräte-IO der Audanika Audio Engine: Geräte, Hot-Plug sowie
 Ausgabe-, Eingabe- und Duplex-Streams, die über die C-ABI von
 `aud_audio_core` rendern, mit einer Stream-Zeit für jeden Block und einer
 selbstständigen Erholung von Routenwechseln und Unterbrechungen. Oboe auf
-Android, miniaudio mit AVAudioSession auf iOS.
+Android, miniaudio mit AVAudioSession auf iOS, auf dem HAL unter macOS und
+auf WASAPI unter Windows.
 
 Teil der Audanika Audio Engine; geplant in [aud_audio_pm](https://github.com/audaudio/aud_audio_pm).
 
 ## Ziele
 
 - Ein Stream für Ausgabe, Eingabe und Vollduplex auf iOS und Android
-  (Ticket 21, Schritt S3) und auf macOS (Ticket 37, der macOS-Teil von
-  S3b); Windows und Linux folgen mit S3c und S3d und laufen bis dahin auf
-  dem Null-Gerät
+  (Ticket 21, Schritt S3), auf macOS (Ticket 37) und auf Windows (Ticket
+  38), die macOS- und Windows-Teile von S3b; Linux folgt mit seinem Teil
+  von S3b und läuft bis dahin auf dem Null-Gerät
 - Blöcke von höchstens `maxFrames` Frames, jeder mit seiner
   `AudStreamTime`: Sample-Position, Host-Zeit mit Quelle und Genauigkeit,
   Latenz je Richtung (Entscheidung time-001)
@@ -125,6 +126,11 @@ Geräten.
   `followFormat` darauf.
 - Der Audio-Thread legt Benachrichtigungen in eine lock-freie Queue; ein
   Benachrichtigungs-Thread weckt den Dart-Listener.
+- Auf macOS und Windows listet das Backend die Geräte der Plattform - den
+  HAL, die Endpunkte von WASAPI - und öffnet sie immer über ihre ID; ein
+  Stream ohne ID folgt dem Standardgerät, indem er neu öffnet (io-004,
+  io-005). Unter Windows laufen die Streams im Shared Mode mit der Rate
+  des Mix-Formats und den Low-Latency-Perioden von `IAudioClient3`.
 - Das Null-Gerät hält die Zeit ohne Hardware und nimmt eingespeiste Fehler
   an: Die nativen Tests laufen darauf unter ASan/UBSan, dem
   RealtimeSanitizer und dem ThreadSanitizer (`node scripts/test-native.js`).

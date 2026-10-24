@@ -5,8 +5,8 @@
 // found in the LICENSE file in the root of this package.
 
 // The null backend: devices that keep time without hardware, for the tests
-// and for the platforms whose devices arrive with a later ticket (S3b to
-// S3d). A device calls back on a thread of its own, paced by the host clock,
+// and for Linux, whose device arrives with a later ticket (its part of
+// S3b). A device calls back on a thread of its own, paced by the host clock,
 // or - with the manual clock - whenever the test calls aud_io_null_process.
 // Tests inject the faults of real devices: disconnects, changes of rate and
 // channels, interruptions, late callbacks, xruns, hot-plugs, failing opens
@@ -597,10 +597,11 @@ std::unique_ptr<Backend> createNullBackend(AudIoSession* session,
 }
 
 #if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE) && \
-    !AUD_IO_MACOS_DEVICE
-// Windows and Linux get their devices with S3c and S3d; macOS has its own
-// (aud_io_macos.mm) where the hook builds it with AUD_IO_MACOS_DEVICE - the
-// native tests build only the C++ files and keep the null backend.
+    !AUD_IO_MACOS_DEVICE && !AUD_IO_WINDOWS_DEVICE
+// Linux gets its device with its part of S3b; macOS (aud_io_macos.mm) and
+// Windows (aud_io_windows.cpp) have their own where the hook builds them
+// with AUD_IO_MACOS_DEVICE and AUD_IO_WINDOWS_DEVICE - the native tests
+// build neither and keep the null backend.
 std::unique_ptr<Backend> createPlatformBackend(
     AudIoSession* session, const AudIoSessionConfig& config) {
   return createNullBackend(session, config);

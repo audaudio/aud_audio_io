@@ -11,4 +11,5 @@ its plan review: vendored, not fetched at build time). The Android build
 hook compiles all of Oboe's sources - AAudio, the OpenSL ES fallback below
 API 27 and the conversions of its flow graph are all reachable - and links
 them with hidden symbols; miniaudio's Core Audio device is compiled into the
-library on iOS only, until the desktop backends of S3b to S3d use it.
+library on iOS and macOS (ticket 37), its WASAPI device on Windows (ticket
+38); Linux keeps the null device until its part of S3b.

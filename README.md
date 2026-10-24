@@ -4,16 +4,16 @@ Audio device IO of the Audanika Audio Engine: devices, hot-plug and
 output, input and duplex streams that render through the C ABI of
 `aud_audio_core`, with a stream time for every block and recovery from
 route changes and interruptions on their own. Oboe on Android, miniaudio
-with AVAudioSession on iOS.
+with AVAudioSession on iOS, on the HAL on macOS and on WASAPI on Windows.
 
 Part of the Audanika Audio Engine; planned in [aud_audio_pm](https://github.com/audaudio/aud_audio_pm).
 
 ## Goals
 
 - One stream for output, input and full duplex on iOS and Android
-  (ticket 21, step S3) and on macOS (ticket 37, the macOS part of S3b);
-  Windows and Linux follow with S3c and S3d and run the null device until
-  then
+  (ticket 21, step S3), on macOS (ticket 37) and on Windows (ticket 38),
+  the macOS and Windows parts of S3b; Linux follows with its part of S3b
+  and runs the null device until then
 - Blocks of at most `maxFrames` frames, each with its `AudStreamTime`:
   sample position, host time with source and accuracy, latency per
   direction (decision time-001)
@@ -121,6 +121,11 @@ devices.
   its own, like those of the package, opts out with `followFormat`.
 - The audio thread posts notifications into a lock-free queue; a
   notification thread wakes the Dart listener.
+- On macOS and Windows the backend lists the devices of the platform -
+  the HAL, the endpoints of WASAPI - and always opens them by id; a stream
+  without an id follows the default device by reopening (io-004, io-005).
+  On Windows the streams run in shared mode at the mix format's rate with
+  the low-latency periods of `IAudioClient3`.
 - The null device keeps time without hardware and takes injected faults:
   the native tests run on it under ASan/UBSan, the RealtimeSanitizer and
   ThreadSanitizer (`node scripts/test-native.js`).

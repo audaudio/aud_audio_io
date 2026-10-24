@@ -72,6 +72,12 @@ void main() {
       markTestSkipped('no microphone permission on this device');
       return;
     }
+    // A Windows PC without a microphone, or a Remote Desktop session that
+    // does not pass one through, has no input endpoint.
+    if (!session.devices.any((d) => d.directions.hasInput)) {
+      markTestSkipped('no input device on this device');
+      return;
+    }
     final stream = session.open(
       const AudIoStreamConfig(direction: AudIoDirection.duplex),
       render: AudIoStreamFfi.thruRender,
