@@ -1,15 +1,25 @@
 # aud_audio_io
 
-Audio-Geräte-IO der Audanika Audio Engine: Geräte, Hot-Plug sowie
-Ausgabe-, Eingabe- und Duplex-Streams, die über die C-ABI von
-`aud_audio_core` rendern, mit einer Stream-Zeit für jeden Block und einer
-selbstständigen Erholung von Routenwechseln und Unterbrechungen. Oboe auf
-Android, miniaudio mit AVAudioSession auf iOS, auf dem HAL unter macOS und
-auf WASAPI unter Windows.
+[English](README.md) | Deutsch
 
-Teil der Audanika Audio Engine; geplant in [aud_audio_pm](https://github.com/audaudio/aud_audio_pm).
+[![CI](https://github.com/audaudio/aud_audio_io/actions/workflows/quick_check.yaml/badge.svg)](https://github.com/audaudio/aud_audio_io/actions/workflows/quick_check.yaml)
 
-## Ziele
+Audio-Geräte-IO der Audanika Audio Engine: Geräteliste, Hot-Plug,
+mehrkanalige Duplex-Streams mit Zeitstempeln; Oboe auf Android, miniaudio
+sonst.
+
+Teil der Audanika Audio Engine; geplant in
+[aud_audio_pm](https://github.com/audaudio/aud_audio_pm). Die Streams
+rendern über die C-ABI von `aud_audio_core`, mit einer Stream-Zeit für
+jeden Block und einer selbstständigen Erholung von Routenwechseln und
+Unterbrechungen. Oboe auf Android, miniaudio mit AVAudioSession auf iOS,
+auf dem HAL unter macOS und auf WASAPI unter Windows; Linux läuft auf dem
+Null-Gerät, bis sein Backend folgt.
+
+## Motivation
+
+Die Engine braucht einen Weg zu den Audiogeräten jeder Plattform, mit den
+Garantien, die ihr Realtime-Vertrag verlangt:
 
 - Ein Stream für Ausgabe, Eingabe und Vollduplex auf iOS und Android
   (Ticket 21, Schritt S3), auf macOS (Ticket 37) und auf Windows (Ticket
@@ -31,13 +41,17 @@ Teil der Audanika Audio Engine; geplant in [aud_audio_pm](https://github.com/aud
 
 ## Installation
 
+Das Paket ist nicht auf pub.dev veröffentlicht; trage es als
+Git-Abhängigkeit in die `pubspec.yaml` einer Flutter-App oder eines
+Flutter-Pakets ein und führe `flutter pub get` aus:
+
 ```yaml
 dependencies:
   aud_audio_io:
     git:
       url: git@github.com:audaudio/aud_audio_io.git
       tag_pattern: "{{version}}"
-    version: ^0.2.0
+    version: ^0.4.0
 ```
 
 Das Paket braucht das Flutter-SDK: Auf Android erreicht es die Geräte, den
@@ -48,15 +62,7 @@ aufnimmt, trägt auf iOS `NSMicrophoneUsageDescription` in ihre
 ihr `AndroidManifest.xml`; `UIBackgroundModes` mit `audio` lässt eine
 iOS-App im Hintergrund weiterspielen.
 
-## Dokumentation
-
-- [Audio IO](https://audaudio.github.io/io/) auf der Dokumentationsseite
-- [Der Plan von Ticket 21](https://github.com/audaudio/aud_audio_pm/blob/main/doc/2026-Q4/tickets/2026-10-09-21-build-the-audio-io-for-ios-and-android.md)
-  mit Umsetzungsnotizen, Messungen und Befunden
-- Die C-API: [`src/aud_audio_io.h`](src/aud_audio_io.h)
-- Die Guides in [`doc/guides`](doc/guides)
-
-## Code-Beispiele
+## Verwendung
 
 Ein Sinus auf der Standardausgabe:
 
@@ -108,6 +114,29 @@ Sinus, hört den Eingang mit und misst die Latenz eines Geräts mit
 `AudIoProbe`; ihr Integrationstest läuft auf Simulatoren, Emulatoren und
 Geräten.
 
+## Grenzen
+
+- Linux hat noch kein Geräte-Backend und läuft auf dem Null-Gerät, das die
+  Zeit ohne Hardware hält
+- Das Paket rendert nur über eine native Render-Funktion: Der Audio-Thread
+  ruft nie nach Dart, eine Render-Funktion ist also in C oder C++
+  geschrieben und wird über FFI erreicht
+- Es braucht das Flutter-SDK; es ist kein reines Dart-Paket
+- Eine neue Rate oder Kanalzahl hält die Render-Funktion an, bis der
+  Client das Format bestätigt, es sei denn, die Render-Funktion folgt dem
+  Format mit `followFormat` selbst
+- Aufnehmen braucht die Mikrofonberechtigung der Plattform, siehe
+  [Installation](#installation)
+
+## Dokumentation
+
+- [Audio IO](https://audaudio.github.io/io/) auf der Dokumentationsseite
+- [Der Plan von Ticket 21](https://github.com/audaudio/aud_audio_pm/blob/main/doc/2026-Q4/tickets/2026-10-09-21-build-the-audio-io-for-ios-and-android.md)
+  mit Umsetzungsnotizen, Messungen und Befunden
+- Die C-API: [`src/aud_audio_io.h`](src/aud_audio_io.h)
+- Die Guides in [`doc/guides`](doc/guides)
+- Die Blog-Posts in [`doc/de/blog`](doc/de/blog)
+
 ## Funktionsweise
 
 - Eine Session je App besitzt das Backend und weckt einen Listener; ihre
@@ -139,8 +168,18 @@ Geräten.
   (`node scripts/check-page-size.js`). `node scripts/generate-bindings.js`
   und `node scripts/generate-android-bindings.js` erzeugen die Bindings neu.
 
+## Status
+
+Version 0.4.0, vor 1.0 — die API kann sich zwischen Minor-Versionen
+ändern. Die Geräte-Backends für iOS, Android, macOS und Windows stehen;
+Linux folgt.
+
 ## Mitwirken
 
 Tickets laufen durch den `gg`-Workflow: siehe den
 [Develop Guide](doc/guides/develop-guide.md) und den
 [Review Guide](doc/guides/for-ai/ai-review-guide.md).
+
+## Lizenz
+
+MIT — siehe [LICENSE](LICENSE).

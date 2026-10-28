@@ -375,10 +375,9 @@ extension type AudioManager._(jni$_.JObject _$this) implements jni$_.JObject {
   /// The returned object must be released after use, by calling the [release] method.
   static jni$_.JString? get PROPERTY_OUTPUT_FRAMES_PER_BUFFER =>
       _id_PROPERTY_OUTPUT_FRAMES_PER_BUFFER.getNullable(
-            _class,
-            jni$_.JString.type,
-          )
-          as jni$_.JString?;
+        _class,
+        jni$_.JString.type,
+      ) as jni$_.JString?;
 
   static final _id_PROPERTY_OUTPUT_SAMPLE_RATE = _class.staticFieldId(
     r'PROPERTY_OUTPUT_SAMPLE_RATE',
