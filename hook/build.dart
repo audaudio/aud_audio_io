@@ -126,9 +126,9 @@ Future<List<String>> oboeSources(Uri packageRoot) async {
   await for (final entity in root.list(recursive: true)) {
     if (entity is File && entity.path.endsWith('.cpp')) {
       sources.add(
-        Uri.file(
-          entity.path,
-        ).toString().replaceFirst(packageRoot.toString(), ''),
+        Uri.file(entity.path)
+            .toString()
+            .replaceFirst(packageRoot.toString(), ''),
       );
     }
   }
