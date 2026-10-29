@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 - 2026-10-29
 
 ### Added
 
@@ -23,7 +23,6 @@
 - Move the dependency overrides of the example to the workspace root
 
 - Keep test within the test_api that flutter_test pins
-
 
 ## 0.5.0 - 2026-10-28
 
@@ -50,7 +49,6 @@
 - Upgrade the dependencies published since the first pass
 
 - Lift the lock file to the newest resolvable versions
-
 
 ## 0.4.0 - 2026-10-24
 
@@ -116,7 +114,6 @@
 
 - Native tests: two losses of one device disconnect once, a late loss of a replaced device keeps the new one, the new device's own loss still recovers
 
-
 ## 0.3.4 - 2026-10-15
 
 ### Added
@@ -147,7 +144,6 @@
 
 - The placements are documented as the code sets them; the README names AudIoPlacement
 
-
 ## 0.3.3 - 2026-10-14
 
 ### Added
@@ -168,7 +164,6 @@
 - Add review fixes of ticket 26
 
 - Remove the blank lines between the entries under Unreleased in CHANGELOG.md
-
 
 ## 0.3.1 - 2026-10-12
 
